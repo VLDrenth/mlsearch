@@ -37,8 +37,26 @@ class Orchestrator:
             results[step.id] = out
 
         elif step.action == "merge":
-            # For now, just return a placeholder since merge isn't fully implemented
-            results[step.id] = "merge_placeholder"
+            # Collect results from dependencies
+            dep_results = []
+            for dep in step.depends_on:
+                if dep in results:
+                    dep_results.append(results[dep])
+            
+            # Collect outputs from spawned workers
+            worker_outputs = []
+            for worker_id, worker in self.pool.items():
+                if worker_id in step.depends_on:
+                    worker_outputs.append(worker.get_output())
+            
+            # Combine all results
+            all_results = dep_results + worker_outputs
+            if all_results:
+                # Join non-empty results with newlines
+                filtered_results = [str(result) for result in all_results if result and str(result).strip()]
+                results[step.id] = "\n".join(filtered_results) if filtered_results else "No results to merge"
+            else:
+                results[step.id] = "No results to merge"
 
     def _ask_planner(self, task: str) -> str:
         system_prompt, user_prompt = build_planner_prompts(task)
