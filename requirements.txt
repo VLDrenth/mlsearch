@@ -1,0 +1,9 @@
+requests
+numpy
+pandas
+openai
+fastapi
+arxiv
+python-dotenv
+pydantic
+uvicorn
