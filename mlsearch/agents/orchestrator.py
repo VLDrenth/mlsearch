@@ -12,7 +12,7 @@ class Orchestrator:
 
     async def run(self, user_task: str) -> str:
         plan_json = self._ask_planner(user_task)
-        plan = Plan.parse_raw(plan_json)
+        plan = Plan.model_validate_json(plan_json)
 
         # simple topological execution (no cycles in tiny PoC)
         results: dict[str, str] = {}
@@ -37,14 +37,13 @@ class Orchestrator:
             results[step.id] = out
 
         elif step.action == "merge":
-            texts = [self.pool[w].get_output() for w in step.workers]
-            results[step.id] = "\n".join(texts)
+            # For now, just return a placeholder since merge isn't fully implemented
+            results[step.id] = "merge_placeholder"
 
     def _ask_planner(self, task: str) -> str:
         system_prompt, user_prompt = build_planner_prompts(task)
-        return self.planner.generate(
-            user_prompt, system_prompt=system_prompt
-        )
+        self.planner.set_system_prompt(system_prompt)
+        return self.planner.generate(user_prompt)
 
     async def _call_tool(self, name: str, args: dict) -> str:
         if name not in self.tools:

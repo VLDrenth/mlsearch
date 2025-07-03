@@ -2,6 +2,12 @@ from textwrap import dedent
 from typing import Tuple
 
 
+_AVAILABLE_TOOLS_BLOCK = """
+TOOLS AVAILABLE
+---------------
+1. arxiv_search(query: str, limit: int) – returns list of papers
+"""
+
 _SYSTEM_TEMPLATE = dedent(
     """\
     You are an **orchestration planner**.
@@ -18,7 +24,7 @@ _SYSTEM_TEMPLATE = dedent(
           "id": "s1",
           "action": "spawn" | "tool" | "merge",
           "worker": "ResearchWorker" | "CodeWorker" | "WriterWorker" | null,
-          "tool":   "web_search" | "python_exec" | null,
+          "tool":   "arxiv_search" | null,
           "args":   {{ ... }} | null,
           "depends_on": ["s0", "s3", ...]   // IDs of earlier steps
         }}
@@ -58,4 +64,4 @@ def build_planner_prompts(task: str) -> Tuple[str, str]:
     user_prompt : str
         The task embedded in a short wrapper that triggers the reply.
     """
-    return _SYSTEM_TEMPLATE, _USER_TEMPLATE.format(task=task)
+    return _SYSTEM_TEMPLATE + _AVAILABLE_TOOLS_BLOCK, _USER_TEMPLATE.format(task=task)

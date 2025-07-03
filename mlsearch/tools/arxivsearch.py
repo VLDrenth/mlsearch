@@ -17,7 +17,7 @@ class Paper:
     authors: List[str]
     year: int
     pdf_url: str
-    abstract: str
+    summary: str
 
 def _parse_entry(entry_el: ET.Element) -> Paper:
     """Convert one <entry/> XML element to Paper."""
