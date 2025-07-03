@@ -5,6 +5,7 @@ ML Search CLI - Search for ML papers on ArXiv using natural language queries.
 import asyncio
 import sys
 import os
+import logging
 from pathlib import Path
 
 # Add the mlsearch package to the path
@@ -16,6 +17,15 @@ from tools.arxivsearch import arxiv_search
 
 async def main():
     """Main CLI function."""
+    # Set up logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.StreamHandler(sys.stdout)
+        ]
+    )
+    
     # Check for API key
     if not os.getenv("OPENAI_API_KEY"):
         print("Error: OPENAI_API_KEY environment variable not set")
