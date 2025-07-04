@@ -143,6 +143,14 @@ class Agent:
             formatted.append(f"... and {len(self.relevant_papers) - 10} more papers")
         
         return "\n".join(formatted)
+    
+    def _should_broaden_search(self, search_results: list, relevant_papers: list) -> bool:
+        """Determine if search should be broadened based on results."""
+        total_papers = len([r for r in search_results if r is not None])
+        relevant_count = len(relevant_papers)
+        
+        # Broaden if we found very few total papers or very few relevant ones
+        return total_papers < 10 or relevant_count < 3
 
 
 class ResearchAgent(Agent):
@@ -152,6 +160,10 @@ class ResearchAgent(Agent):
         """Perform research work with complete autonomy over search strategy."""
         self.logger.info(f"🔬 ResearchAgent working on: {task}")
         
+        # Get relevant categories from orchestrator
+        relevant_categories = getattr(self, 'relevant_categories', ['cs.LG', 'stat.ML'])  # fallback
+        categories_str = ' OR '.join(f'cat:{cat}' for cat in relevant_categories)
+        
         # Give the agent complete autonomy to decide how to use tools
         research_prompt = f"""
         You are an autonomous research agent. Your task is to research: {task}
@@ -159,17 +171,27 @@ class ResearchAgent(Agent):
         You have access to the following tools:
         - arxiv_search(query, limit): Search academic papers on ArXiv
         
-        IMPORTANT: ArXiv Search Syntax - Use proper syntax to get good results:
-        - Use quotes for exact phrases: "active learning"
-        - Use AND/OR for logic: "bayesian" AND "active learning"
-        - Use parentheses for grouping: ("active learning" OR "selective sampling") AND "bayesian"
-        - Use field searches: ti:"active learning" (title), abs:"bayesian methods" (abstract)
-        - Use category filters: cat:cs.AI OR cat:cs.LG OR cat:stat.ML
+        IMPORTANT: ArXiv Search Strategy - Use flexible approaches for best results:
         
-        Examples of good queries:
-        - "mutual information" AND "dependence measures"
-        - ti:"correlation" AND (abs:"alternatives" OR abs:"nonlinear")
-        - ("distance correlation" OR "maximal information coefficient") AND cat:stat.ML
+        **General Strategy:** Use broader, concept-based searches rather than exact phrases:
+        - Identify core concepts from your topic
+        - Use related terms and synonyms rather than exact phrases
+        - Focus on outcomes, effects, factors rather than exact terminology
+        - Consider cross-disciplinary angles (economics, health, education, etc.)
+        
+        **Search Syntax:**
+        - Use AND/OR for concepts: "[concept A]" AND "[concept B]" AND ("[related term 1]" OR "[related term 2]")
+        - Use parentheses for grouping: ("[broader term]" OR "[specific term]") AND "[main concept]"
+        - Use broader abstract searches: abs:"[core concept]" AND abs:"[related concept]"
+        - Include category filters: {categories_str}
+        
+        **Search Approach:**
+        1. **Start broad**: Use core concepts and related terms from YOUR topic
+        2. **Include synonyms**: Think of different ways YOUR topic might be described
+        3. **Cross-disciplinary**: Consider how YOUR topic might appear in different fields
+        4. **Avoid overly specific**: Don't require exact phrase matches in titles
+        
+        Replace all bracketed placeholders with actual terms from your specific research topic.
         
         Your goal is to find relevant papers and provide comprehensive insights.
         You can decide:
@@ -202,6 +224,10 @@ class ResearchAgent(Agent):
     async def _execute_autonomous_research(self, task: str, plan: str) -> None:
         """Execute research autonomously based on the agent's plan."""
         try:
+            # Get relevant categories from orchestrator
+            relevant_categories = getattr(self, 'relevant_categories', ['cs.LG', 'stat.ML'])  # fallback
+            categories_str = ' OR '.join(f'cat:{cat}' for cat in relevant_categories)
+            
             # Start with an initial search
             self.logger.info("🔍 Starting autonomous research execution...")
             
@@ -209,16 +235,20 @@ class ResearchAgent(Agent):
             search_prompt = f"""
             Based on the task: {task}
             
-            What should be the first arXiv search query to start researching this topic?
+            Generate the first arXiv search query for this topic. Use a BROAD, concept-based approach:
             
-            Use proper arXiv syntax:
-            - Use quotes for exact phrases: "active learning"
-            - Use AND/OR for logic: "bayesian" AND "active learning"
-            - Use parentheses for grouping: ("active learning" OR "selective sampling") AND "bayesian"
-            - Use field searches: ti:"active learning" (title), abs:"bayesian methods" (abstract)
-            - Use category filters: cat:cs.AI OR cat:cs.LG OR cat:stat.ML
+            **Strategy:**
+            - Identify 2-3 core concepts from the task
+            - Think of synonyms and related terms for YOUR specific topic
+            - Use AND/OR to combine concepts flexibly
+            - Avoid exact phrase matching (especially in titles)
+            - Consider cross-disciplinary angles relevant to YOUR topic
+            - Focus on effects, factors, outcomes related to YOUR topic
             
-            Provide only the search query string using proper arXiv syntax, no explanation.
+            **Syntax:** Include category filters: {categories_str}
+            
+            Generate a broad, flexible search query using actual terms from your task.
+            Provide only the search query string, no explanation.
             """
             
             initial_query = self.llm.generate(search_prompt).strip()
@@ -258,11 +288,13 @@ class ResearchAgent(Agent):
             - Would additional searches likely find more relevant papers?
             
             IMPORTANT: Use proper arXiv syntax for any new search queries:
-            - Use quotes for exact phrases: "active learning"
-            - Use AND/OR for logic: "bayesian" AND "active learning"
-            - Use parentheses for grouping: ("active learning" OR "selective sampling") AND "bayesian"
-            - Use field searches: ti:"active learning" (title), abs:"bayesian methods" (abstract)
-            - Use category filters: cat:cs.AI OR cat:cs.LG OR cat:stat.ML
+            - Use quotes for exact phrases: "[exact phrase from task]"
+            - Use AND/OR for logic: "[concept A]" AND "[concept B]"
+            - Use parentheses for grouping: ("[method X]" OR "[method Y]") AND "[main topic]"
+            - Use field searches: ti:"[title keyword]" (title), abs:"[abstract keyword]" (abstract)
+            - Use category filters: {categories_str}
+            
+            Use terms relevant to your specific research task, not generic examples!
             
             Based on your memory and notes, what should you do next?
             
@@ -372,17 +404,20 @@ class ResearchAgent(Agent):
                 
                 Suggest ONE final, broader search strategy using different terminology.
                 Think about:
-                - What are the core concepts in different terms?
-                - What broader field might this fall under?
-                - What simpler keywords might work?
+                - What are the core concepts expressed in simpler, more general terms?
+                - What broader academic fields might study this topic?
+                - What are the effects, outcomes, or factors related to this topic?
+                - How might this topic appear in interdisciplinary research?
+                - What fundamental human behaviors or social phenomena does this relate to?
                 
-                Use proper arXiv syntax:
-                - Use quotes for exact phrases: "active learning"
-                - Use AND/OR for logic: "bayesian" AND "active learning"
-                - Use parentheses for grouping: ("active learning" OR "selective sampling") AND "bayesian"
-                - Use field searches: ti:"active learning" (title), abs:"bayesian methods" (abstract)
-                - Use category filters: cat:cs.AI OR cat:cs.LG OR cat:stat.ML
+                Use proper arXiv syntax with terms relevant to YOUR topic:
+                - Use quotes for exact phrases: "[exact phrase from task]"
+                - Use AND/OR for logic: "[concept A]" AND "[concept B]"
+                - Use parentheses for grouping: ("[method X]" OR "[method Y]") AND "[main topic]"
+                - Use field searches: ti:"[title keyword]" (title), abs:"[abstract keyword]" (abstract)
+                - Use category filters: {categories_str}
                 
+                Generate a search query using the actual concepts from your task.
                 Provide only the search query string using proper arXiv syntax:
                 """
                 
@@ -551,6 +586,10 @@ class AnalysisAgent(Agent):
         """Perform analysis work with autonomous tool usage."""
         self.logger.info(f"📊 AnalysisAgent working on: {task}")
         
+        # Get relevant categories from orchestrator
+        relevant_categories = getattr(self, 'relevant_categories', ['cs.LG', 'stat.ML'])  # fallback
+        categories_str = ' OR '.join(f'cat:{cat}' for cat in relevant_categories)
+        
         analysis_prompt = f"""
         You are an autonomous analysis agent. Your task is to analyze: {task}
         
@@ -578,13 +617,14 @@ class AnalysisAgent(Agent):
             
             What arXiv search query would help you gather the most relevant papers for analysis?
             
-            Use proper arXiv syntax:
-            - Use quotes for exact phrases: "active learning"
-            - Use AND/OR for logic: "bayesian" AND "active learning"
-            - Use parentheses for grouping: ("active learning" OR "selective sampling") AND "bayesian"
-            - Use field searches: ti:"active learning" (title), abs:"bayesian methods" (abstract)
-            - Use category filters: cat:cs.AI OR cat:cs.LG OR cat:stat.ML
+            Use proper arXiv syntax with terms relevant to YOUR analysis task:
+            - Use quotes for exact phrases: "[exact phrase from task]"
+            - Use AND/OR for logic: "[concept A]" AND "[concept B]"
+            - Use parentheses for grouping: ("[method X]" OR "[method Y]") AND "[main topic]"
+            - Use field searches: ti:"[title keyword]" (title), abs:"[abstract keyword]" (abstract)
+            - Use category filters: {categories_str}
             
+            Generate a search query using actual concepts from your analysis task.
             Provide only the search query string using proper arXiv syntax.
             """
             
@@ -614,19 +654,38 @@ class AnalysisAgent(Agent):
                 - What broader or narrower terms might work?
                 - What related fields might have relevant work?
                 
-                Use proper arXiv syntax:
-                - Use quotes for exact phrases: "active learning"
-                - Use AND/OR for logic: "bayesian" AND "active learning"
-                - Use parentheses for grouping: ("active learning" OR "selective sampling") AND "bayesian"
-                - Use field searches: ti:"active learning" (title), abs:"bayesian methods" (abstract)
-                - Use category filters: cat:cs.AI OR cat:cs.LG OR cat:stat.ML
+                Use proper arXiv syntax with terms relevant to YOUR task:
+                - Use quotes for exact phrases: "[exact phrase from task]"
+                - Use AND/OR for logic: "[concept A]" AND "[concept B]"
+                - Use parentheses for grouping: ("[method X]" OR "[method Y]") AND "[main topic]"
+                - Use field searches: ti:"[title keyword]" (title), abs:"[abstract keyword]" (abstract)
+                - Use category filters: {categories_str}
                 
-                Provide comma-separated search queries using proper arXiv syntax:
+                Generate search queries using actual concepts from your analysis task.
+                
+                IMPORTANT: Provide ONLY comma-separated search queries, no explanations or formatting.
+                Example format: query1, query2, query3
+                
+                Comma-separated search queries:
                 """
                 
                 alt_queries_response = self.llm.generate(alt_search_prompt).strip()
-                alt_queries = [q.strip().strip('"') for q in alt_queries_response.split(",")]
-                alt_queries = [q for q in alt_queries if q and len(q) > 3]
+                
+                # Try to extract just the queries from the response
+                import re
+                # Look for the last line that contains comma-separated queries
+                lines = alt_queries_response.split('\n')
+                query_line = alt_queries_response
+                
+                # Find lines that look like comma-separated queries (no markdown, bullets, etc.)
+                for line in reversed(lines):
+                    line = line.strip()
+                    if ',' in line and not line.startswith(('*', '-', '#', '```')) and len(line) < 300:
+                        query_line = line
+                        break
+                
+                alt_queries = [q.strip().strip('"').strip('`') for q in query_line.split(",")]
+                alt_queries = [q for q in alt_queries if q and len(q) > 10 and ('AND' in q or 'OR' in q or '"' in q)]
                 
                 for alt_query in alt_queries[:2]:
                     self.logger.info(f"🔍 Alternative search: {alt_query}")

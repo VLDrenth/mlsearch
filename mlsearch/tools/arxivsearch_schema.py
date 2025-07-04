@@ -16,8 +16,8 @@ ARXIV_SEARCH_SCHEMA = {
             "limit": {
                 "type": "integer",
                 "minimum": 1,
-                "maximum": 100,
-                "default": 10,
+                "maximum": 30000,
+                "default": 100,
                 "description": "Number of papers to return.",
             },
         },

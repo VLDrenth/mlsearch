@@ -19,17 +19,151 @@ class SimpleOrchestrator:
         """Run the orchestrator with minimal coordination and intelligent merging."""
         self.logger.info(f"🚀 SimpleOrchestrator starting task: {user_task}")
         
+        # Determine relevant arXiv categories for this task
+        relevant_categories = await self._select_categories(user_task)
+        
         # Determine what agents to spawn
         agent_plan = await self._plan_agents(user_task)
         
-        # Spawn and run agents
-        agent_outputs = await self._run_agents(agent_plan, user_task)
+        # Spawn and run agents with category guidance
+        agent_outputs = await self._run_agents(agent_plan, user_task, relevant_categories)
         
         # Intelligent merging with quality assessment
         final_result = await self._intelligent_merge(user_task, agent_outputs)
         
         self.logger.info("✅ SimpleOrchestrator completed successfully")
         return final_result
+    
+    async def _select_categories(self, task: str) -> List[str]:
+        """Determine the most relevant arXiv categories for the given task."""
+        self.logger.info("🎯 Selecting relevant arXiv categories...")
+        
+        category_prompt = f"""
+        Task: {task}
+        
+        Select the most relevant arXiv categories for this research task. Consider which academic disciplines would likely contain papers relevant to this topic.
+        
+        Available arXiv categories:
+        
+        **Computer Science (cs):**
+        - cs.AI (Artificial Intelligence)
+        - cs.LG (Machine Learning)
+        - cs.CL (Computation and Language)
+        - cs.CV (Computer Vision)
+        - cs.CR (Cryptography and Security)
+        - cs.DB (Databases)
+        - cs.DS (Data Structures and Algorithms)
+        - cs.IR (Information Retrieval)
+        - cs.NE (Neural and Evolutionary Computing)
+        - cs.RO (Robotics)
+        - cs.SY (Systems and Control)
+        
+        **Mathematics (math):**
+        - math.ST (Statistics Theory)
+        - math.PR (Probability)
+        - math.OC (Optimization and Control)
+        - math.NA (Numerical Analysis)
+        - math.CO (Combinatorics)
+        - math.AT (Algebraic Topology)
+        - math.DS (Dynamical Systems)
+        - math.NT (Number Theory)
+        
+        **Statistics (stat):**
+        - stat.ML (Machine Learning)
+        - stat.ME (Methodology)
+        - stat.TH (Statistics Theory)
+        - stat.AP (Applications)
+        - stat.CO (Computation)
+        
+        **Physics (physics):**
+        - quant-ph (Quantum Physics)
+        - cond-mat (Condensed Matter)
+        - physics.data-an (Data Analysis, Statistics and Probability)
+        - physics.comp-ph (Computational Physics)
+        - physics.soc-ph (Physics and Society)
+        
+        **Economics (econ):**
+        - econ.EM (Econometrics)
+        - econ.TH (Theoretical Economics)
+        - econ.GN (General Economics)
+        
+        **Quantitative Finance (q-fin):**
+        - q-fin.ST (Statistical Finance)
+        - q-fin.RM (Risk Management)
+        - q-fin.PM (Portfolio Management)
+        - q-fin.CP (Computational Finance)
+        
+        **Quantitative Biology (q-bio):**
+        - q-bio.QM (Quantitative Methods)
+        - q-bio.GN (Genomics)
+        - q-bio.NC (Neurons and Cognition) [use for psychology topics]
+        
+        **Electrical Engineering (eess):**
+        - eess.SP (Signal Processing)
+        - eess.SY (Systems and Control)
+        - eess.IV (Image and Video Processing)
+        - eess.AS (Audio and Speech Processing)
+        
+        IMPORTANT NOTES:
+        - For psychology topics, use q-bio.NC (Neurons and Cognition)
+        - For sociology/social topics, use physics.soc-ph (Physics and Society)
+        - For economics topics, use econ.GN, econ.EM, or econ.TH
+        - Only select from the exact category codes listed above
+        
+        Based on the task "{task}", select 2-5 most relevant categories. Consider interdisciplinary topics.
+        
+        Respond with only the category codes, comma-separated:
+        Example: cs.LG, stat.ML, math.OC
+        """
+        
+        response = self.llm.generate(category_prompt).strip()
+        
+        # Parse categories
+        categories = [cat.strip() for cat in response.split(",")]
+        
+        # Validate against known arXiv categories
+        valid_categories = {
+            'cs.AI', 'cs.LG', 'cs.CL', 'cs.CV', 'cs.CR', 'cs.DB', 'cs.DS', 'cs.IR', 'cs.NE', 'cs.RO', 'cs.SY',
+            'math.ST', 'math.PR', 'math.OC', 'math.NA', 'math.CO', 'math.AT', 'math.DS', 'math.NT',
+            'stat.ML', 'stat.ME', 'stat.TH', 'stat.AP', 'stat.CO',
+            'quant-ph', 'cond-mat', 'physics.data-an', 'physics.comp-ph', 'physics.soc-ph',
+            'econ.EM', 'econ.TH', 'econ.GN',
+            'q-fin.ST', 'q-fin.RM', 'q-fin.PM', 'q-fin.CP',
+            'q-bio.QM', 'q-bio.GN', 'q-bio.NC',
+            'eess.SP', 'eess.SY', 'eess.IV', 'eess.AS'
+        }
+        
+        # Filter to only valid categories
+        valid_selected = [cat for cat in categories if cat in valid_categories]
+        
+        # Map common invalid categories to valid ones
+        category_mapping = {
+            'psychology': 'q-bio.NC',
+            'sociology': 'physics.soc-ph', 
+            'social': 'physics.soc-ph',
+            'economics': 'econ.GN',
+            'finance': 'q-fin.ST',
+            'biology': 'q-bio.QM',
+            'physics': 'physics.soc-ph'
+        }
+        
+        # Map any invalid categories
+        for cat in categories:
+            if cat not in valid_categories:
+                for invalid, valid in category_mapping.items():
+                    if invalid in cat.lower() and valid not in valid_selected:
+                        valid_selected.append(valid)
+                        break
+        
+        categories = valid_selected
+        
+        if not categories:
+            # Fallback to broad ML/Stats categories
+            categories = ["cs.LG", "stat.ML"]
+            self.logger.warning("🔄 Category selection failed, using default ML/Stats categories")
+        
+        self.logger.info(f"🎯 Selected categories: {', '.join(categories)}")
+        return categories
     
     async def _plan_agents(self, task: str) -> List[Dict]:
         """Determine what agents to spawn for the given task."""
@@ -169,8 +303,8 @@ class SimpleOrchestrator:
             # Fallback to simple research agent
             return [{"type": "ResearchAgent", "focus": task}]
     
-    async def _run_agents(self, agent_plan: List[Dict], task: str) -> List[Dict]:
-        """Spawn and run agents concurrently."""
+    async def _run_agents(self, agent_plan: List[Dict], task: str, categories: List[str]) -> List[Dict]:
+        """Spawn and run agents concurrently with category guidance."""
         self.logger.info(f"🤖 Spawning {len(agent_plan)} agents...")
         
         # Create agents
@@ -181,6 +315,8 @@ class SimpleOrchestrator:
             
             if agent_type in agent_registry:
                 agent = agent_registry[agent_type](self.tools)
+                # Set categories on the agent
+                agent.relevant_categories = categories
                 agents.append({"agent": agent, "focus": focus, "id": f"agent_{i+1}"})
                 self.logger.info(f"✅ Spawned {agent_type} with focus: {focus}")
             else:
