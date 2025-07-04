@@ -22,9 +22,9 @@ class Paper:
 
 def _optimize_arxiv_query(original_query: str) -> str:
     """Use LLM to optimize ArXiv search query for better relevance."""
-    from core.llmclient import LLMClient
+    from mlsearch.core.llmclient import LLMClient
     
-    query_optimizer = LLMClient(model_name="gpt-4o-mini")
+    query_optimizer = LLMClient(model_name="gpt-4o")
     
     optimization_prompt = f"""
 You are an expert at constructing ArXiv search queries to find highly relevant academic papers.
@@ -86,7 +86,7 @@ def _parse_entry(entry_el: ET.Element) -> Paper:
     year = int(m.group(1)) if m else 0
     return Paper(title=title, authors=authors, year=year, pdf_url=pdf_url, summary=summary)
 
-def arxiv_search(query: str, *, limit: int = 50) -> List[dict]:
+def arxiv_search(query: str, *, limit: int = 100) -> List[dict]:
     """
     Search arXiv and return the newest *limit* papers.
 
@@ -138,3 +138,15 @@ def arxiv_search(query: str, *, limit: int = 50) -> List[dict]:
         logger.info(f"📄 Latest paper: '{result[0]['title']}' ({result[0]['year']})")
     
     return result
+
+if __name__ == "__main__":
+    # Example usage
+    logging.basicConfig(level=logging.INFO)
+    query = "active learning AND uncertainty sampling"
+    results = arxiv_search(query, limit=20)
+
+    for paper in results:
+        print(f"{paper['title']} ({paper['year']}) by {', '.join(paper['authors'])}")
+        print(f"PDF: {paper['pdf_url']}")
+        print(f"Summary: {paper['summary'][:100]}...")
+        print()

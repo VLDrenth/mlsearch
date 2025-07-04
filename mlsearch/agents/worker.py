@@ -40,109 +40,195 @@ class ResearchWorker(Worker):
         self.logger.info("🔬 ResearchWorker ready for research tasks")
     
     async def work(self, task: str) -> str:
-        """Perform research work with reasoning about search strategy."""
+        """Perform research work with iterative search strategy based on intermediate results."""
         self.logger.info(f"🔬 ResearchWorker analyzing task: {task}")
         
         # Create a reasoning LLM client
         from core.llmclient import LLMClient
         reasoning_llm = LLMClient(model_name="gpt-4o-mini")
         
-        # Execute the research direction assigned by orchestrator
-        # Focus on tactical search strategy, not high-level research planning
-        reasoning_prompt = f"""
-        You are a research execution assistant. The orchestrator has assigned you a specific research direction.
+        # Start with initial search strategy
+        self.logger.info("🤔 Planning initial search strategy...")
         
-        Assigned Research Direction: {task}
-        
-        Your job is to execute this research direction efficiently by determining:
-        1. What are the best search terms to find papers for this specific direction?
-        2. What variations of search terms will maximize coverage for this angle?
-        3. How many results should you fetch for each search?
-        4. What specific keywords and phrases are most relevant to this research angle?
-        
-        Focus on EXECUTING the assigned research direction, not planning what to research.
-        
-        Respond with a JSON plan:
-        {{
-            "searches": [
-                {{
-                    "query": "specific search terms for arxiv",
-                    "limit": 10,
-                    "focus": "how this search supports the assigned research direction"
-                }}
-            ],
-            "reasoning": "explanation of your search execution strategy"
-        }}
-        """
-        
-        self.logger.info("🤔 Reasoning about search strategy...")
-        reasoning_response = reasoning_llm.generate(reasoning_prompt)
-        
-        self.logger.info(f"💡 Search strategy: {reasoning_response[:100]}...")
+        all_results = []
+        search_history = []
+        max_searches = 3  # Limit to avoid infinite loops
         
         try:
             import json
-            # Clean the response - sometimes LLMs wrap JSON in markdown
-            reasoning_response = reasoning_response.strip()
-            if reasoning_response.startswith("```json"):
-                reasoning_response = reasoning_response[7:]
-            if reasoning_response.endswith("```"):
-                reasoning_response = reasoning_response[:-3]
-            reasoning_response = reasoning_response.strip()
             
-            search_plan = json.loads(reasoning_response)
+            # Initial search planning
+            initial_prompt = f"""
+            You are a research execution assistant. Plan the first search for this research direction:
             
-            # Execute the planned searches
-            all_results = []
-            for i, search in enumerate(search_plan.get("searches", [])):
-                self.logger.info(f"🔍 Executing search {i+1}/{len(search_plan['searches'])}: {search['query']}")
+            Research Direction: {task}
+            
+            Plan a focused initial search to understand the current state of this research area.
+            
+            Respond with JSON:
+            {{
+                "query": "specific search terms for arxiv",
+                "limit": 10,
+                "focus": "what this initial search aims to discover"
+            }}
+            """
+            
+            for search_round in range(max_searches):
+                self.logger.info(f"🔍 Starting search round {search_round + 1}/{max_searches}")
+                
+                if search_round == 0:
+                    # First search - use initial planning
+                    search_response = reasoning_llm.generate(initial_prompt)
+                else:
+                    # Subsequent searches - analyze previous results
+                    analysis_prompt = f"""
+                    You are analyzing search results to plan the next search.
+                    
+                    Research Direction: {task}
+                    
+                    Previous searches and results:
+                    {self._format_search_history(search_history)}
+                    
+                    Current findings summary:
+                    - Found {len(all_results)} papers total
+                    - {len([r for r in all_results if r.get('year', 0) >= 2023])} papers from 2023+
+                    
+                    Recent papers found:
+                    {self._format_recent_papers(all_results)}
+                    
+                    Based on what you've found, what specific aspect needs more exploration?
+                    What search terms would find relevant papers you haven't discovered yet?
+                    
+                    Respond with JSON:
+                    {{
+                        "query": "new search terms targeting unexplored aspects",
+                        "limit": 10,
+                        "focus": "what gap this search will fill",
+                        "analysis": "what the previous results showed"
+                    }}
+                    """
+                    search_response = reasoning_llm.generate(analysis_prompt)
+                
+                # Parse search plan
+                search_response = search_response.strip()
+                if search_response.startswith("```json"):
+                    search_response = search_response[7:]
+                if search_response.endswith("```"):
+                    search_response = search_response[:-3]
+                search_response = search_response.strip()
+                
+                search_plan = json.loads(search_response)
+                
+                # Execute the search
+                query = search_plan.get("query", "")
+                limit = search_plan.get("limit", 10)
+                focus = search_plan.get("focus", "")
+                
+                self.logger.info(f"🎯 Search {search_round + 1}: {query}")
+                self.logger.info(f"📋 Focus: {focus}")
                 
                 # Call the arxiv_search tool
                 search_results = await self._call_tool("arxiv_search", {
-                    "query": search["query"],
-                    "limit": search["limit"]
+                    "query": query,
+                    "limit": limit
                 })
                 
-                # Parse the results (they come as a string representation of list)
+                # Parse results
                 if isinstance(search_results, str):
                     try:
-                        search_results = eval(search_results)  # Quick parse for now
+                        search_results = eval(search_results)
                     except:
-                        pass
+                        search_results = []
                 
-                if isinstance(search_results, list):
-                    all_results.extend(search_results)
-                else:
-                    all_results.append(search_results)
+                if not isinstance(search_results, list):
+                    search_results = [search_results] if search_results else []
+                
+                # Track search history
+                search_history.append({
+                    "round": search_round + 1,
+                    "query": query,
+                    "focus": focus,
+                    "results_count": len(search_results),
+                    "results": search_results
+                })
+                
+                # Add new results (avoid duplicates by title)
+                existing_titles = {r.get('title', '').lower() for r in all_results}
+                new_results = [r for r in search_results if r.get('title', '').lower() not in existing_titles]
+                all_results.extend(new_results)
+                
+                self.logger.info(f"📊 Search {search_round + 1} found {len(search_results)} papers, {len(new_results)} new")
+                
+                # Analyze if we should continue searching
+                if search_round < max_searches - 1:
+                    continue_prompt = f"""
+                    Should we continue searching for more papers on: {task}?
+                    
+                    Current status:
+                    - Total papers found: {len(all_results)}
+                    - New papers from last search: {len(new_results)}
+                    - Searches completed: {search_round + 1}
+                    
+                    Recent findings:
+                    {self._format_recent_papers(search_results[:3])}
+                    
+                    Should we do one more search? Consider:
+                    - Are there important gaps still unexplored?
+                    - Are we finding substantially new relevant papers?
+                    - Would another search angle be valuable?
+                    
+                    Respond with JSON:
+                    {{
+                        "continue": true/false,
+                        "reason": "explanation of decision"
+                    }}
+                    """
+                    
+                    continue_response = reasoning_llm.generate(continue_prompt)
+                    continue_response = continue_response.strip()
+                    if continue_response.startswith("```json"):
+                        continue_response = continue_response[7:]
+                    if continue_response.endswith("```"):
+                        continue_response = continue_response[:-3]
+                    continue_response = continue_response.strip()
+                    
+                    try:
+                        continue_decision = json.loads(continue_response)
+                        if not continue_decision.get("continue", False):
+                            self.logger.info(f"🏁 Stopping search: {continue_decision.get('reason', 'No reason given')}")
+                            break
+                    except:
+                        # If parsing fails, continue with next search
+                        pass
             
-            # Summarize findings
-            self.logger.info(f"📊 Found {len(all_results)} total results across all searches")
-            
-            # Create a summary
+            # Generate comprehensive summary
+            self.logger.info("📝 Generating comprehensive research summary...")
             summary_prompt = f"""
-            Based on the following research results for the task "{task}", create a comprehensive summary:
+            Create a comprehensive research summary for: {task}
             
-            Search Strategy Used: {search_plan.get('reasoning', 'Multiple targeted searches')}
+            Search process:
+            {self._format_search_history(search_history)}
             
-            Results Found: {len(all_results)} papers
+            Total papers found: {len(all_results)}
             
-            Key Findings:
+            Key papers by relevance and recency:
+            {self._format_key_papers(all_results)}
+            
+            Provide a structured analysis covering:
+            1. Current state of research in this area
+            2. Key innovations and recent developments
+            3. Major research directions and trends
+            4. Gaps and opportunities for future work
+            
+            Focus on insights gained from the {len(all_results)} papers found across {len(search_history)} targeted searches.
             """
             
-            # Add top results to summary
-            for i, result in enumerate(all_results[:5]):  # Top 5 results
-                if isinstance(result, dict):
-                    summary_prompt += f"\n{i+1}. {result.get('title', 'Unknown')} ({result.get('year', 'Unknown')})\n   Authors: {', '.join(result.get('authors', []))}\n   Summary: {result.get('summary', 'No summary')[:200]}...\n"
-            
-            summary_prompt += "\n\nPlease provide a structured summary highlighting the key innovations and trends found."
-            
-            self.logger.info("📝 Generating research summary...")
             summary = reasoning_llm.generate(summary_prompt)
             
-            self.output = f"Research Analysis: {search_plan.get('reasoning', '')}\n\n{summary}\n\nDetailed Results:\n{str(all_results)}"
+            self.output = f"Iterative Research Analysis\n\n{summary}\n\nSearch History:\n{self._format_search_history(search_history)}\n\nDetailed Results:\n{str(all_results)}"
             
         except Exception as e:
-            self.logger.error(f"❌ Error in research analysis: {e}")
+            self.logger.error(f"❌ Error in iterative research: {e}")
             # Fallback to simple search
             self.logger.info("🔄 Falling back to simple search...")
             simple_results = await self._call_tool("arxiv_search", {
@@ -152,6 +238,52 @@ class ResearchWorker(Worker):
             self.output = f"Research completed with simple search: {simple_results}"
         
         return self.output
+    
+    def _format_search_history(self, history: list) -> str:
+        """Format search history for display."""
+        formatted = []
+        for search in history:
+            formatted.append(f"Search {search['round']}: {search['query']}")
+            formatted.append(f"  Focus: {search['focus']}")
+            formatted.append(f"  Found: {search['results_count']} papers")
+        return "\n".join(formatted)
+    
+    def _format_recent_papers(self, papers: list) -> str:
+        """Format recent papers for analysis."""
+        if not papers:
+            return "No papers found"
+        
+        formatted = []
+        for i, paper in enumerate(papers[:5]):
+            if isinstance(paper, dict):
+                title = paper.get('title', 'Unknown')
+                year = paper.get('year', 'Unknown')
+                authors = ', '.join(paper.get('authors', [])[:2])
+                if len(paper.get('authors', [])) > 2:
+                    authors += " et al."
+                formatted.append(f"{i+1}. {title} ({year}) - {authors}")
+        return "\n".join(formatted)
+    
+    def _format_key_papers(self, papers: list) -> str:
+        """Format key papers with more detail."""
+        if not papers:
+            return "No papers found"
+        
+        # Sort by year (recent first) and take top 10
+        sorted_papers = sorted(papers, key=lambda p: p.get('year', 0), reverse=True)
+        
+        formatted = []
+        for i, paper in enumerate(sorted_papers[:10]):
+            if isinstance(paper, dict):
+                title = paper.get('title', 'Unknown')
+                year = paper.get('year', 'Unknown')
+                authors = ', '.join(paper.get('authors', [])[:3])
+                if len(paper.get('authors', [])) > 3:
+                    authors += " et al."
+                summary = paper.get('summary', 'No summary')[:150] + "..."
+                formatted.append(f"{i+1}. {title} ({year})\n   Authors: {authors}\n   Summary: {summary}")
+        
+        return "\n\n".join(formatted)
 
 class AnalysisWorker(Worker):
     """Worker specialized for analyzing and synthesizing research findings."""
