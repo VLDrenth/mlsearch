@@ -165,78 +165,160 @@ class SimpleOrchestrator:
         self.logger.info(f"🎯 Selected categories: {', '.join(categories)}")
         return categories
     
+    def _get_search_strategy_templates(self) -> Dict[str, Dict]:
+        """Get predefined search strategy templates for consistent agent deployment."""
+        return {
+            "Foundational Literature": {
+                "description": "Core papers, surveys, seminal works (older, highly-cited)",
+                "query_patterns": [
+                    '"{concept}" AND (survey OR review OR overview)',
+                    '"{concept}" AND (introduction OR tutorial OR foundations)',
+                    '"{concept}" AND cat:{category}'
+                ],
+                "temporal_focus": "all_time",
+                "paper_types": ["surveys", "reviews", "foundational works"]
+            },
+            "Recent Advances": {
+                "description": "Latest developments, cutting-edge methods (2020+)",
+                "query_patterns": [
+                    '"{concept}" AND (2020 OR 2021 OR 2022 OR 2023 OR 2024)',
+                    '"{concept}" AND (novel OR new OR recent OR latest)',
+                    '"{concept}" AND cat:{category}'
+                ],
+                "temporal_focus": "2020_onwards",
+                "paper_types": ["conference papers", "recent methods", "state-of-the-art"]
+            },
+            "Cross-Disciplinary": {
+                "description": "Papers from related fields applying to this domain",
+                "query_patterns": [
+                    '"{concept}" AND ({related_field} OR {application_domain})',
+                    '"{concept}" AND (interdisciplinary OR cross-domain)',
+                    '"{concept}" AND cat:{alt_category}'
+                ],
+                "temporal_focus": "all_time",
+                "paper_types": ["interdisciplinary work", "cross-domain applications"]
+            },
+            "Method-Specific": {
+                "description": "Deep dive into specific algorithms/techniques",
+                "query_patterns": [
+                    '"{method}" AND (algorithm OR technique OR method)',
+                    '"{method}" AND (implementation OR optimization)',
+                    '"{method}" AND cat:{category}'
+                ],
+                "temporal_focus": "all_time",
+                "paper_types": ["methodological papers", "algorithmic improvements"]
+            },
+            "Application-Focused": {
+                "description": "Real-world applications and case studies",
+                "query_patterns": [
+                    '"{concept}" AND (application OR applications OR case)',
+                    '"{concept}" AND (real-world OR practical OR industry)',
+                    '"{concept}" AND (dataset OR benchmark OR evaluation)'
+                ],
+                "temporal_focus": "recent_preferred",
+                "paper_types": ["application papers", "case studies", "empirical work"]
+            },
+            "Theoretical": {
+                "description": "Mathematical foundations, theoretical analysis",
+                "query_patterns": [
+                    '"{concept}" AND (theory OR theoretical OR mathematical)',
+                    '"{concept}" AND (analysis OR proof OR convergence)',
+                    '"{concept}" AND (bounds OR complexity OR guarantees)'
+                ],
+                "temporal_focus": "all_time",
+                "paper_types": ["theoretical papers", "mathematical analysis", "proofs"]
+            }
+        }
+    
     async def _plan_agents(self, task: str) -> List[Dict]:
         """Determine what agents to spawn for the given task."""
         self.logger.info("🧠 Planning agent deployment...")
         
         planning_prompt = f"""
-        You are an orchestrator planning how to research this task: {task}
+        You are a research orchestrator planning search strategies for: {task}
         
-        Available agent types:
-        - ResearchAgent: Autonomous research with paper search and analysis
-        - AnalysisAgent: Deep analysis and synthesis of findings
+        Your job is to create specialized search agents with DISTINCT, NON-OVERLAPPING search strategies to maximize paper discovery.
+        
+        AVAILABLE SEARCH STRATEGIES:
+        1. **Foundational Literature**: Core papers, surveys, seminal works (older, highly-cited)
+           - Query patterns: survey/review papers, foundational works, introductory papers
+           - Focus: Comprehensive coverage of established knowledge
+        2. **Recent Advances**: Latest developments, cutting-edge methods (2020+)
+           - Query patterns: temporal filters (2020+), novel/new/recent keywords
+           - Focus: State-of-the-art methods and recent breakthroughs
+        3. **Cross-Disciplinary**: Papers from related fields applying to this domain
+           - Query patterns: interdisciplinary keywords, alternative categories
+           - Focus: Applications from other domains, cross-field perspectives
+        4. **Method-Specific**: Deep dive into specific algorithms/techniques
+           - Query patterns: algorithm/technique/method keywords, implementation details
+           - Focus: Detailed methodological papers and algorithmic improvements
+        5. **Application-Focused**: Real-world applications and case studies
+           - Query patterns: application/practical/industry keywords, datasets/benchmarks
+           - Focus: Empirical work, case studies, practical implementations
+        6. **Theoretical**: Mathematical foundations, theoretical analysis
+           - Query patterns: theory/mathematical/analysis keywords, proofs/bounds/complexity
+           - Focus: Mathematical foundations, theoretical guarantees, formal analysis
+        
+        ARXIV CATEGORY SPECIALIZATION:
+        - cs.LG: Machine Learning
+        - cs.AI: Artificial Intelligence  
+        - stat.ML: Statistics - Machine Learning
+        - cs.CL: Computational Linguistics
+        - cs.CV: Computer Vision
+        - cs.IR: Information Retrieval
+        - stat.AP: Statistics - Applications
+        - cs.DS: Data Structures and Algorithms
+        - econ.EM: Econometrics
+        - q-fin.ST: Statistical Finance
         
         TASK COMPLEXITY ASSESSMENT:
-        Analyze the task and determine how many agents are needed:
         
-        **1 Agent (Simple tasks):**
-        - Single, well-defined concept to research
-        - Straightforward literature review
-        - Basic comparison of 2-3 methods
-        Example: "What is active learning?"
+        **1 Agent (Simple, focused queries):**
+        - Single well-defined concept
+        - Basic "what is X?" questions
+        - Limited scope literature review
         
-        **2 Agents (Moderate complexity):**
-        - Multi-faceted topic requiring research + analysis
-        - Comparison across different domains/approaches
-        - Need both breadth of research and depth of analysis
-        Example: "Compare machine learning optimization methods"
+        **2-3 Agents (Moderate complexity):**
+        - Comparison between 2-3 methods/approaches
+        - Topic spanning 2-3 domains
+        - Need both breadth and depth
         
-        **3+ Agents (Complex tasks):**
-        - Broad topic with multiple distinct subtopics that can be researched in parallel
-        - Topic spans multiple domains/disciplines
-        - Need specialized research on different aspects simultaneously
-        - Complex synthesis required across domains
-        Examples: 
-        - "Alternative measures for variable dependence across statistics, ML, and information theory"
-        - "Time series forecasting methods across economics, neural networks, and statistical modeling"
-        - "Machine learning optimization techniques: gradient-based, evolutionary, and Bayesian approaches"
+        **3-4 Agents (Complex, multi-faceted):**
+        - Broad topics with multiple distinct aspects
+        - Cross-disciplinary research needed
+        - Multiple methodological approaches
+        - Need comprehensive coverage
         
-        DECISION PROCESS:
-        1. Is this a simple, single-concept question? → 1 agent
-        2. Does it need both research and specialized analysis? → 2 agents  
-        3. Are there multiple distinct subtopics that can be researched in parallel? → 3+ agents
-        4. Does the topic span multiple domains/disciplines? → 3+ agents
-        5. Would parallel specialized research improve coverage? → 3+ agents
+        FOR EACH AGENT, SPECIFY:
+        1. **search_strategy**: One of the 6 strategies above
+        2. **arxiv_categories**: Specific ArXiv categories (2-3 max per agent)
+        3. **search_terms**: Specific keywords/phrases for this agent's focus
+        4. **focus_description**: Clear, actionable research focus
+        5. **query_patterns**: Specific query patterns to use
         
-        Based on your analysis of "{task}", determine the optimal number and type of agents.
+        ANALYZE "{task}" and determine optimal agent deployment:
         
-        Respond with ONLY a JSON list. Examples for different complexities:
+        - Core concepts: [identify 2-4 key concepts]
+        - Research domains: [identify relevant fields]
+        - Methodological approaches: [identify different methods/techniques]
+        - Time sensitivity: [recent advances vs foundational work needed]
         
-        1 Agent example:
-        ["ResearchAgent"]
+        Respond with ONLY a JSON array. Each ResearchAgent should have:
+        {{
+            "type": "ResearchAgent",
+            "search_strategy": "Recent Advances",
+            "arxiv_categories": ["cs.LG", "stat.ML"],
+            "search_terms": ["deep learning", "neural networks", "transformer"],
+            "focus_description": "Search for recent advances in deep learning architectures from 2020-2024",
+            "query_patterns": ["(\\"deep learning\\" OR \\"neural networks\\") AND (2020 OR 2021 OR 2022 OR 2023 OR 2024)"]
+        }}
         
-        2 Agent example:
-        ["ResearchAgent", "AnalysisAgent"]
-        
-        3+ Agent example:
-        [
-            {{"type": "ResearchAgent", "focus": "statistical dependency measures"}},
-            {{"type": "ResearchAgent", "focus": "machine learning correlation methods"}},
-            {{"type": "ResearchAgent", "focus": "information-theoretic measures"}},
-            {{"type": "AnalysisAgent", "focus": "comparative analysis across all approaches"}}
-        ]
-        
-        IMPORTANT: 
-        - Return ONLY the JSON array, no explanation text
-        - DO NOT default to 2 agents - analyze the task complexity first
-        - For broad topics covering multiple domains: USE 3+ AGENTS with parallel research
-        - Each ResearchAgent should focus on a distinct subtopic/domain
-        - Complex tasks benefit from parallel specialized research
-        
-        TASK ANALYSIS FOR "{task}":
-        - How many distinct subtopics or domains does this cover?
-        - Would parallel research on different aspects improve coverage?
-        - Is this broad enough to warrant multiple specialized researchers?
+        CRITICAL REQUIREMENTS:
+        - Each agent must have DIFFERENT arxiv_categories (no overlap)
+        - Each agent must have DIFFERENT search_terms (minimal overlap)
+        - Each agent must have DIFFERENT search_strategy
+        - Focus on COMPLEMENTARY rather than overlapping research
+        - Use specific, actionable search instructions
         """
         
         response = self.llm.generate(planning_prompt)
@@ -279,20 +361,44 @@ class SimpleOrchestrator:
                 if isinstance(agent_spec, str):
                     # Simple string format: ["ResearchAgent", "AnalysisAgent"]
                     agent_type = agent_spec
-                    agent_focus = task  # Use main task as focus
+                    normalized_spec = {
+                        "type": agent_type,
+                        "focus": task,
+                        "search_strategy": "Foundational Literature",
+                        "arxiv_categories": ["cs.LG", "stat.ML"],
+                        "search_terms": task.split()[:3],
+                        "focus_description": f"General research on {task}",
+                        "query_patterns": [f'"{task.split()[0]}" OR "{task.split()[1]}"' if len(task.split()) > 1 else f'"{task.split()[0]}"']
+                    }
                 elif isinstance(agent_spec, dict):
-                    # Object format: {"type": "ResearchAgent", "focus": "..."}
+                    # Enhanced object format with search strategy details
                     agent_type = agent_spec.get('type', 'ResearchAgent')
-                    agent_focus = agent_spec.get('focus', agent_spec.get('description', task))
+                    normalized_spec = {
+                        "type": agent_type,
+                        "focus": agent_spec.get('focus', agent_spec.get('focus_description', task)),
+                        "search_strategy": agent_spec.get('search_strategy', 'Foundational Literature'),
+                        "arxiv_categories": agent_spec.get('arxiv_categories', ["cs.LG", "stat.ML"]),
+                        "search_terms": agent_spec.get('search_terms', task.split()[:3]),
+                        "focus_description": agent_spec.get('focus_description', agent_spec.get('focus', task)),
+                        "query_patterns": agent_spec.get('query_patterns', [f'"{task.split()[0]}"'])
+                    }
                 else:
                     # Fallback for unexpected formats
-                    agent_type = 'ResearchAgent'
-                    agent_focus = task
+                    normalized_spec = {
+                        "type": 'ResearchAgent',
+                        "focus": task,
+                        "search_strategy": "Foundational Literature",
+                        "arxiv_categories": ["cs.LG", "stat.ML"],
+                        "search_terms": task.split()[:3],
+                        "focus_description": f"General research on {task}",
+                        "query_patterns": [f'"{task.split()[0]}"']
+                    }
                 
-                normalized_spec = {"type": agent_type, "focus": agent_focus}
                 normalized_plan.append(normalized_spec)
                 
-                self.logger.info(f"  Agent {i}: {agent_type} - {agent_focus}")
+                self.logger.info(f"  Agent {i}: {agent_type} - {normalized_spec['search_strategy']}")
+                self.logger.info(f"    Categories: {normalized_spec['arxiv_categories']}")
+                self.logger.info(f"    Search Terms: {normalized_spec['search_terms']}")
             
             return normalized_plan
             
@@ -315,10 +421,18 @@ class SimpleOrchestrator:
             
             if agent_type in agent_registry:
                 agent = agent_registry[agent_type](self.tools)
-                # Set categories on the agent
-                agent.relevant_categories = categories
+                
+                # Set enhanced agent configuration
+                agent.relevant_categories = spec.get("arxiv_categories", categories)
+                agent.search_strategy = spec.get("search_strategy", "Foundational Literature")
+                agent.search_terms = spec.get("search_terms", task.split()[:3])
+                agent.focus_description = spec.get("focus_description", focus)
+                agent.query_patterns = spec.get("query_patterns", [f'"{task.split()[0]}"'])
+                
                 agents.append({"agent": agent, "focus": focus, "id": f"agent_{i+1}"})
-                self.logger.info(f"✅ Spawned {agent_type} with focus: {focus}")
+                self.logger.info(f"✅ Spawned {agent_type} with strategy: {agent.search_strategy}")
+                self.logger.info(f"    Categories: {agent.relevant_categories}")
+                self.logger.info(f"    Search Terms: {agent.search_terms}")
             else:
                 self.logger.error(f"❌ Unknown agent type: {agent_type}")
         

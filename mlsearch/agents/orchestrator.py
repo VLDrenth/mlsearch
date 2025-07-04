@@ -109,7 +109,7 @@ class Orchestrator:
         self.logger.info("🎯 Breaking down task into specific research angles...")
         
         from core.llmclient import LLMClient
-        planning_llm = LLMClient(model_name="gpt-4o-mini")
+        planning_llm = LLMClient(model_name="gpt-4.1-2025-04-14")
         
         planning_prompt = f"""
         You are a research orchestrator. Break down this research task into 3-4 distinct, non-overlapping research angles that different workers can explore in parallel.

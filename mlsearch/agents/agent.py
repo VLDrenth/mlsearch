@@ -9,7 +9,7 @@ class Agent:
     
     def __init__(self, tools: Dict[str, Callable], llm_client: LLMClient = None) -> None:
         self.tools = tools
-        self.llm = llm_client or LLMClient(model_name="gpt-4o-mini")
+        self.llm = llm_client or LLMClient(model_name="gpt-4.1-2025-04-14")
         self.output = ""
         self.relevant_papers = []  # Memory of relevant papers found
         self.search_notes = []     # Notes about search progress
@@ -231,34 +231,74 @@ class ResearchAgent(Agent):
             # Start with an initial search
             self.logger.info("🔍 Starting autonomous research execution...")
             
-            # Let the agent decide on initial search terms
-            search_prompt = f"""
-            Based on the task: {task}
+            # Generate initial search queries using orchestrator guidance
+            self.logger.info("🎯 Generating search queries using orchestrator strategy...")
             
-            Generate the first arXiv search query for this topic. Use a BROAD, concept-based approach:
+            # Use orchestrator-provided configuration if available
+            search_strategy = getattr(self, 'search_strategy', 'Foundational Literature')
+            search_terms = getattr(self, 'search_terms', task.split()[:3])
+            query_patterns = getattr(self, 'query_patterns', [])
             
-            **Strategy:**
-            - Identify 2-3 core concepts from the task
-            - Think of synonyms and related terms for YOUR specific topic
-            - Use AND/OR to combine concepts flexibly
-            - Avoid exact phrase matching (especially in titles)
-            - Consider cross-disciplinary angles relevant to YOUR topic
-            - Focus on effects, factors, outcomes related to YOUR topic
+            self.logger.info(f"🎯 Search Strategy: {search_strategy}")
+            self.logger.info(f"🎯 Search Terms: {search_terms}")
             
-            **Syntax:** Include category filters: {categories_str}
+            # Generate diverse initial queries based on strategy
+            initial_queries = []
             
-            Generate a broad, flexible search query using actual terms from your task.
-            Provide only the search query string, no explanation.
-            """
+            # Use orchestrator-provided query patterns first
+            if query_patterns:
+                initial_queries.extend(query_patterns[:2])  # Use first 2 provided patterns
             
-            initial_query = self.llm.generate(search_prompt).strip()
-            if initial_query.startswith('"') and initial_query.endswith('"'):
-                initial_query = initial_query[1:-1]
+            # Strategy-specific query generation
+            if search_strategy == "Recent Advances":
+                # Focus on recent papers with temporal filters
+                recent_query = f"({' OR '.join([f'\"{term}\"' for term in search_terms[:2]])}) AND (2020 OR 2021 OR 2022 OR 2023 OR 2024)"
+                initial_queries.append(recent_query)
+            elif search_strategy == "Foundational Literature":
+                # Focus on comprehensive coverage
+                foundational_query = f"({' OR '.join([f'\"{term}\"' for term in search_terms])})"
+                initial_queries.append(foundational_query)
+            elif search_strategy == "Cross-Disciplinary":
+                # Broader terms for cross-disciplinary search
+                cross_query = f"({search_terms[0]} AND {search_terms[1]})" if len(search_terms) >= 2 else f'"{search_terms[0]}"'
+                initial_queries.append(cross_query)
+            elif search_strategy == "Method-Specific":
+                # Focus on specific methods/algorithms
+                method_query = f"({' AND '.join([f'\"{term}\"' for term in search_terms[:2]])})"
+                initial_queries.append(method_query)
+            elif search_strategy == "Application-Focused":
+                # Focus on applications and case studies
+                app_query = f"({search_terms[0]} AND (application OR applications OR case))"
+                initial_queries.append(app_query)
+            elif search_strategy == "Theoretical":
+                # Focus on theoretical foundations
+                theory_query = f"({search_terms[0]} AND (theory OR theoretical OR mathematical OR analysis))"
+                initial_queries.append(theory_query)
             
-            self.logger.info(f"🎯 Initial search query: {initial_query}")
+            # Fallback: Generate from task if no strategy-specific queries
+            if not initial_queries:
+                task_words = task.lower().split()
+                core_concepts = [w for w in task_words if len(w) > 3 and w not in ['with', 'using', 'for', 'and', 'the', 'that', 'this']][:3]
+                if len(core_concepts) >= 2:
+                    fallback_query = f'"{core_concepts[0]}" OR "{core_concepts[1]}"'
+                    initial_queries.append(fallback_query)
+                else:
+                    initial_queries.append(f'"{task.split()[0]}"')
             
-            # Execute the initial search
-            results = await self.call_tool("arxiv_search", query=initial_query, limit=100)
+            # Remove duplicates and empty queries
+            initial_queries = list(set([q for q in initial_queries if q and len(q) > 5]))
+            
+            self.logger.info(f"🎯 Generated {len(initial_queries)} strategy-specific queries:")
+            for i, query in enumerate(initial_queries, 1):
+                self.logger.info(f"  {i}. {query}")
+            
+            # Execute the first initial search
+            primary_query = initial_queries[0] if initial_queries else task
+            self.primary_query = primary_query  # Store for later reference
+            results = await self.call_tool("arxiv_search", query=primary_query, limit=100)
+            
+            # Store remaining queries for progressive search
+            self.remaining_initial_queries = initial_queries[1:] if len(initial_queries) > 1 else []
             
             # Evaluate papers and add relevant ones to memory
             search_results = results if isinstance(results, list) else [results]
@@ -267,109 +307,80 @@ class ResearchAgent(Agent):
             newly_relevant = self._evaluate_papers_relevance(task, search_results)
             self.logger.info(f"📊 Search results: {papers_found} total, {len(newly_relevant)} relevant")
             
-            analysis_prompt = f"""
-            You are an autonomous research agent. You just searched for: "{initial_query}"
-            
-            CURRENT STATUS:
-            - Papers found in this search: {papers_found}
-            - Relevant papers from this search: {len(newly_relevant)}
-            - Total relevant papers in memory: {len(self.relevant_papers)}
-            - Your research notes: {'; '.join(self.search_notes) if self.search_notes else 'None yet'}
-            
-            Your task is: {task}
-            
-            MEMORY - Relevant papers you've found so far:
-            {self._format_memory_papers()}
-            
-            DECISION CRITERIA:
-            - Do you have enough relevant papers to provide a good answer? (typically 5-15 GOOD papers)
-            - Are there important aspects of the topic not yet covered?
-            - Are your search notes suggesting missing areas?
-            - Would additional searches likely find more relevant papers?
-            
-            IMPORTANT: Use proper arXiv syntax for any new search queries:
-            - Use quotes for exact phrases: "[exact phrase from task]"
-            - Use AND/OR for logic: "[concept A]" AND "[concept B]"
-            - Use parentheses for grouping: ("[method X]" OR "[method Y]") AND "[main topic]"
-            - Use field searches: ti:"[title keyword]" (title), abs:"[abstract keyword]" (abstract)
-            - Use category filters: {categories_str}
-            
-            Use terms relevant to your specific research task, not generic examples!
-            
-            Based on your memory and notes, what should you do next?
-            
-            Respond with:
-            DECISION: [CONTINUE_SEARCHING or FINALIZE_RESULTS]
-            REASONING: [explain your decision based on what you have vs what might be missing]
-            
-            If you decided CONTINUE_SEARCHING, also provide:
-            NEXT_SEARCHES: [comma-separated list of up to 3 new search queries using proper arXiv syntax]
-            """
-            
-            decision_response = self.llm.generate(analysis_prompt)
-            
-            # Parse the agent's decision
+            # Simple heuristic-based search termination logic
             all_results = search_results.copy()
+            relevant_count = len(self.relevant_papers)
+            total_searches = getattr(self, 'search_count', 0) + 1
+            self.search_count = total_searches
             
-            # Extract decision and next searches
-            decision = "FINALIZE_RESULTS"  # Default to finalize if unclear
+            # Calculate relevance rate for this search
+            last_search_relevance = len(newly_relevant) / max(papers_found, 1) if papers_found > 0 else 0
+            
+            # Simple decision criteria
+            continue_searching = (
+                relevant_count < 12 and  # Need more papers (target: 8-15)
+                total_searches < 5 and   # Haven't exhausted search attempts
+                (last_search_relevance > 0.3 or relevant_count < 3)  # Either finding good results or need minimum
+            )
+            
+            # Log the decision logic
+            self.logger.info(f"🤔 Search Decision Logic:")
+            self.logger.info(f"  - Relevant papers found: {relevant_count}/12 target")
+            self.logger.info(f"  - Total searches done: {total_searches}/5 max")
+            self.logger.info(f"  - Last search relevance: {last_search_relevance:.2%}")
+            self.logger.info(f"  - Decision: {'CONTINUE' if continue_searching else 'FINALIZE'}")
+            
+            # Progressive search refinement - generate next searches based on what worked
             next_searches = []
-            reasoning = ""
-            
-            lines = decision_response.split("\n")
-            for line in lines:
-                if line.startswith("DECISION:"):
-                    decision = line.replace("DECISION:", "").strip()
-                elif line.startswith("REASONING:"):
-                    reasoning = line.replace("REASONING:", "").strip()
-                elif line.startswith("NEXT_SEARCHES:"):
-                    searches_text = line.replace("NEXT_SEARCHES:", "").strip()
-                    if searches_text != "NONE" and searches_text:
-                        next_searches = [q.strip().strip('"') for q in searches_text.split(",")]
-                        next_searches = [q for q in next_searches if q and q != "NONE"]
-            
-            # Log the decision clearly
-            self.logger.info(f"🤔 Agent decision: {decision}")
-            if reasoning:
-                self.logger.info(f"💭 Reasoning: {reasoning}")
-            if decision == "CONTINUE_SEARCHING" and next_searches:
-                self.logger.info(f"🔍 Next searches: {next_searches}")
-            
-            # Execute additional searches if the agent decided to continue
-            if decision == "CONTINUE_SEARCHING":
-                # If no specific searches provided, ask the agent to complete its response
-                if not next_searches:
-                    self.logger.info("🔄 Agent decided to continue but didn't provide searches. Asking agent to complete response...")
-                    retry_prompt = f"""
-                    You decided to CONTINUE_SEARCHING for: {task}
-                    
-                    Your reasoning was: {reasoning}
-                    
-                    However, you didn't provide the NEXT_SEARCHES field. Please complete your response by providing specific search queries.
-                    
-                    Use proper arXiv syntax and provide:
-                    NEXT_SEARCHES: [comma-separated list of 2-3 new search queries using proper arXiv syntax]
-                    
-                    Example format:
-                    NEXT_SEARCHES: "time series" AND "deep learning", "neural networks" AND cat:cs.LG, "forecasting methods"
-                    """
-                    
-                    retry_response = self.llm.generate(retry_prompt).strip()
-                    self.logger.info(f"🔄 Agent retry response: {retry_response}")
-                    
-                    # Parse the retry response
-                    for line in retry_response.split("\n"):
-                        if line.startswith("NEXT_SEARCHES:"):
-                            searches_text = line.replace("NEXT_SEARCHES:", "").strip()
-                            if searches_text != "NONE" and searches_text:
-                                next_searches = [q.strip().strip('"') for q in searches_text.split(",")]
-                                next_searches = [q for q in next_searches if q and q != "NONE"]
-                                break
-                    
-                    if next_searches:
-                        self.logger.info(f"🔍 Agent provided searches: {next_searches}")
-                    else:
-                        self.logger.warning("🔄 Agent still didn't provide searches, proceeding with analysis...")
+            if continue_searching:
+                self.logger.info("🔄 Generating progressive search refinement...")
+                
+                # Extract keywords from successful papers for query refinement
+                successful_keywords = []
+                if self.relevant_papers:
+                    for paper in self.relevant_papers[-3:]:  # Use last 3 relevant papers
+                        if paper.get('title'):
+                            # Extract key terms from titles (simple approach)
+                            title_words = paper['title'].lower().split()
+                            # Look for technical terms (longer words, avoid common words)
+                            keywords = [w for w in title_words if len(w) > 4 and w not in ['paper', 'study', 'analysis', 'method', 'approach']]
+                            successful_keywords.extend(keywords[:3])  # Take first 3 keywords
+                
+                # Generate progressive search queries
+                progressive_queries = []
+                
+                # Strategy 1: Use remaining initial queries first
+                if hasattr(self, 'remaining_initial_queries') and self.remaining_initial_queries:
+                    progressive_queries.extend(self.remaining_initial_queries)
+                    self.remaining_initial_queries = []  # Clear after use
+                
+                # Strategy 2: Use successful keywords from found papers
+                if successful_keywords and len(successful_keywords) >= 2:
+                    keyword_query = f'"{successful_keywords[0]}" OR "{successful_keywords[1]}"'
+                    if len(successful_keywords) > 2:
+                        keyword_query += f' OR "{successful_keywords[2]}"'
+                    progressive_queries.append(keyword_query)
+                
+                # Strategy 3: Try different category combinations
+                if total_searches >= 2:
+                    # Expand to related categories
+                    expanded_categories = relevant_categories + ['cs.AI', 'cs.CL', 'stat.AP']
+                    category_query = f"({' OR '.join(task.split()[:2])}) AND ({' OR '.join([f'cat:{cat}' for cat in expanded_categories[:3]])})"
+                    progressive_queries.append(category_query)
+                
+                # Strategy 4: Fallback to very broad search
+                if total_searches >= 3:
+                    broad_terms = task.split()[:2]  # Take first two words from task
+                    fallback_query = f"{broad_terms[0]} AND {broad_terms[1] if len(broad_terms) > 1 else broad_terms[0]}"
+                    progressive_queries.append(fallback_query)
+                
+                # Select up to 3 queries, prioritizing based on search history
+                next_searches = progressive_queries[:3]
+                
+                if next_searches:
+                    self.logger.info(f"🔍 Progressive search queries: {next_searches}")
+                else:
+                    self.logger.warning("🔄 No progressive queries generated, skipping additional searches...")
                 
                 if next_searches:
                     # Execute additional searches and evaluate papers
@@ -396,7 +407,7 @@ class ResearchAgent(Agent):
                 You've tried multiple searches for: {task}
                 
                 Previous searches:
-                1. {initial_query}
+                1. {self.primary_query}
                 {chr(10).join(f"{i+2}. {q}" for i, q in enumerate(next_searches))}
                 
                 All searches returned 0 papers. This suggests the search terms might be too specific,
