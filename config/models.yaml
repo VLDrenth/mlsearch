@@ -3,7 +3,7 @@
 
 models:
   # Default model for general LLM operations
-  default: "gpt-4o-mini"
+  default: "gpt-4.1-2025-04-14"
   
   # Orchestrator planning and coordination
   orchestrator: "gpt-4.1-2025-04-14"
@@ -12,13 +12,13 @@ models:
   agent: "gpt-4.1-2025-04-14"
   
   # Background worker tasks  
-  worker: "gpt-4o-mini"
+  worker: "gpt-4.1-2025-04-14"
   
   # Analysis and synthesis tasks
-  analysis: "gpt-4o-mini"
+  analysis: "gpt-4.1-2025-04-14"
   
   # Reasoning and evaluation tasks
-  reasoning: "gpt-4o-mini"
+  reasoning: "gpt-4.1-2025-04-14"
   
   # Planning tasks
   planning: "gpt-4.1-2025-04-14"
