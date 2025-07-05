@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 # Create FastAPI app
 app = FastAPI(
     title="MLSearch",
-    description="AI-powered academic paper search using multi-agent orchestration",
+    description="Agentic search for ArXiv papers",
     version="1.0.0"
 )
 

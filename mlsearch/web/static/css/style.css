@@ -1,18 +1,26 @@
 /* MLSearch Web Interface Styles */
 
 :root {
-    --primary-color: #2563eb;
-    --primary-hover: #1d4ed8;
-    --secondary-color: #64748b;
-    --success-color: #059669;
-    --warning-color: #d97706;
+    --primary-color: #3b82f6;
+    --primary-hover: #2563eb;
+    --secondary-color: #6366f1;
+    --success-color: #8b5cf6;
+    --warning-color: #a855f7;
     --error-color: #dc2626;
-    --background-color: #f8fafc;
+    --background-color: #f0f4ff;
     --card-background: #ffffff;
-    --text-primary: #1e293b;
-    --text-secondary: #64748b;
-    --border-color: #e2e8f0;
-    --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+    --text-primary: #1e1b4b;
+    --text-secondary: #6366f1;
+    --border-color: #c7d2fe;
+    --accent-color: #8b5cf6;
+    --accent-hover: #7c3aed;
+    --highlight-color: #3b82f6;
+    --purple-light: #f3f4f6;
+    --purple-dark: #581c87;
+    --blue-light: #dbeafe;
+    --blue-dark: #1e40af;
+    --shadow: 0 1px 3px 0 rgb(59 130 246 / 0.1), 0 1px 2px -1px rgb(139 92 246 / 0.1);
+    --shadow-lg: 0 10px 15px -3px rgb(59 130 246 / 0.1), 0 4px 6px -4px rgb(139 92 246 / 0.1);
 }
 
 * {
@@ -23,9 +31,10 @@
 
 body {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
-    background-color: var(--background-color);
+    background: linear-gradient(135deg, #f0f4ff 0%, #e0e7ff 100%);
     color: var(--text-primary);
     line-height: 1.6;
+    min-height: 100vh;
 }
 
 .container {
@@ -36,10 +45,14 @@ body {
 
 /* Header */
 .header {
-    background: var(--card-background);
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(240, 244, 255, 0.95) 100%);
+    backdrop-filter: blur(10px);
     border-bottom: 1px solid var(--border-color);
     padding: 1rem 0;
     box-shadow: var(--shadow);
+    position: sticky;
+    top: 0;
+    z-index: 100;
 }
 
 .header-content {
@@ -51,8 +64,20 @@ body {
 .logo {
     font-size: 1.5rem;
     font-weight: bold;
-    color: var(--primary-color);
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--accent-color) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
     text-decoration: none;
+    transition: all 0.3s ease;
+}
+
+.logo:hover {
+    transform: scale(1.05);
+    background: linear-gradient(135deg, var(--blue-dark) 0%, var(--purple-dark) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
 }
 
 .nav-links {
@@ -65,10 +90,27 @@ body {
     color: var(--text-secondary);
     text-decoration: none;
     font-weight: 500;
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+.nav-links a::after {
+    content: '';
+    position: absolute;
+    bottom: -5px;
+    left: 0;
+    width: 0;
+    height: 2px;
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--accent-color) 100%);
+    transition: width 0.3s ease;
 }
 
 .nav-links a:hover {
     color: var(--primary-color);
+}
+
+.nav-links a:hover::after {
+    width: 100%;
 }
 
 /* Main Content */
@@ -118,23 +160,26 @@ body {
 .search-input:focus {
     outline: none;
     border-color: var(--primary-color);
-    box-shadow: 0 0 0 3px rgb(37 99 235 / 0.1);
+    box-shadow: 0 0 0 3px rgb(59 130 246 / 0.1);
 }
 
 .search-button {
     padding: 0.75rem 1.5rem;
-    background: var(--primary-color);
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--accent-color) 100%);
     color: white;
     border: none;
     border-radius: 0.5rem;
     font-size: 1rem;
     font-weight: 500;
     cursor: pointer;
-    transition: background-color 0.2s;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);
 }
 
 .search-button:hover {
-    background: var(--primary-hover);
+    background: linear-gradient(135deg, var(--primary-hover) 0%, var(--accent-hover) 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
 }
 
 .search-button:disabled {
@@ -232,11 +277,13 @@ body {
 
 /* Progress Bar */
 .progress-container {
-    background: var(--card-background);
-    border-radius: 0.5rem;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(240, 244, 255, 0.95) 100%);
+    backdrop-filter: blur(10px);
+    border-radius: 0.75rem;
     padding: 1.5rem;
     margin-bottom: 2rem;
     box-shadow: var(--shadow);
+    border: 1px solid var(--border-color);
 }
 
 .progress-header {
@@ -257,8 +304,9 @@ body {
 
 .progress-fill {
     height: 100%;
-    background: var(--primary-color);
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--accent-color) 100%);
     transition: width 0.3s ease;
+    border-radius: 0.25rem;
 }
 
 .agent-progress {
@@ -293,18 +341,18 @@ body {
 }
 
 .status-running {
-    background: #dbeafe;
-    color: #1e40af;
+    background: var(--blue-light);
+    color: var(--blue-dark);
 }
 
 .status-completed {
-    background: #d1fae5;
-    color: #059669;
+    background: #e9d5ff;
+    color: var(--purple-dark);
 }
 
 .status-pending {
     background: #f3f4f6;
-    color: #6b7280;
+    color: var(--secondary-color);
 }
 
 /* Paper Cards */
@@ -314,16 +362,19 @@ body {
 }
 
 .paper-card {
-    background: var(--card-background);
-    border-radius: 0.5rem;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(240, 244, 255, 0.95) 100%);
+    backdrop-filter: blur(10px);
+    border-radius: 0.75rem;
     padding: 1.5rem;
     box-shadow: var(--shadow);
     border: 1px solid var(--border-color);
-    transition: box-shadow 0.2s;
+    transition: all 0.3s ease;
 }
 
 .paper-card:hover {
-    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+    box-shadow: var(--shadow-lg);
+    transform: translateY(-5px);
+    border-color: var(--primary-color);
 }
 
 .paper-header {
@@ -380,7 +431,7 @@ body {
 
 .paper-rank {
     display: inline-block;
-    background: var(--primary-color);
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--accent-color) 100%);
     color: white;
     border-radius: 50%;
     width: 2rem;
@@ -390,15 +441,17 @@ body {
     font-weight: bold;
     font-size: 0.875rem;
     margin-right: 0.75rem;
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
 }
 
 .relevance-score {
-    background: #e0f2fe;
-    color: #0277bd;
+    background: linear-gradient(135deg, var(--blue-light) 0%, #f0f4ff 100%);
+    color: var(--blue-dark);
     padding: 0.25rem 0.5rem;
     border-radius: 0.25rem;
     font-size: 0.75rem;
     font-weight: 500;
+    border: 1px solid rgba(59, 130, 246, 0.2);
 }
 
 .paper-footer {
@@ -417,7 +470,7 @@ body {
 
 .category-tag {
     padding: 0.25rem 0.5rem;
-    background: var(--background-color);
+    background: linear-gradient(135deg, #f0f4ff 0%, #e0e7ff 100%);
     border: 1px solid var(--border-color);
     border-radius: 0.25rem;
     font-size: 0.75rem;
@@ -446,13 +499,16 @@ body {
 }
 
 .action-button.primary {
-    background: var(--primary-color);
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--accent-color) 100%);
     color: white;
     border-color: var(--primary-color);
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
 }
 
 .action-button.primary:hover {
-    background: var(--primary-hover);
+    background: linear-gradient(135deg, var(--primary-hover) 0%, var(--accent-hover) 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
 }
 
 /* Loading States */
