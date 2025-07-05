@@ -11,7 +11,7 @@ class SimpleOrchestrator:
     
     def __init__(self, tools: Dict[str, Callable]) -> None:
         self.tools = tools
-        self.llm = LLMClient(model_name="gpt-4o-mini")
+        self.llm = LLMClient(model_type="orchestrator")
         self.logger = logging.getLogger(__name__)
         self.agents: List[Agent] = []
     

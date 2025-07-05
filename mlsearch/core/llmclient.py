@@ -7,6 +7,8 @@ from dotenv import load_dotenv
 from openai import OpenAI
 from openai.types.chat import ChatCompletion
 
+from mlsearch.config import get_model_name
+
 load_dotenv()
 
 
@@ -25,19 +27,16 @@ class LLMClient:
         LLM provider.  Additional providers can be added later.
     """
 
-    MODEL_DEFAULT = {
-        "openai": "gpt-4o-mini",  # July 2025 smallest GPT-4-class model
-    }
-
     def __init__(
         self,
         model_name: Optional[str] = None,
         *,
         system_prompt: Optional[str] = None,
         provider: str = "openai",
+        model_type: str = "default",
     ) -> None:
         self.provider = provider.lower()
-        self.model_name = model_name or self.MODEL_DEFAULT[self.provider]
+        self.model_name = model_name or get_model_name(model_type)
         self.system_prompt = system_prompt
         self.client: OpenAI | None = None
 

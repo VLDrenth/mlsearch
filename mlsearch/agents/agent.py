@@ -9,7 +9,7 @@ class Agent:
     
     def __init__(self, tools: Dict[str, Callable], llm_client: LLMClient = None) -> None:
         self.tools = tools
-        self.llm = llm_client or LLMClient(model_name="gpt-4.1-2025-04-14")
+        self.llm = llm_client or LLMClient(model_type="agent")
         self.output = ""
         self.relevant_papers = []  # Memory of relevant papers found
         self.search_notes = []     # Notes about search progress

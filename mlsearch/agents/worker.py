@@ -45,7 +45,7 @@ class ResearchWorker(Worker):
         
         # Create a reasoning LLM client
         from core.llmclient import LLMClient
-        reasoning_llm = LLMClient(model_name="gpt-4o-mini")
+        reasoning_llm = LLMClient(model_type="reasoning")
         
         # Start with initial search strategy
         self.logger.info("🤔 Planning initial search strategy...")
@@ -298,7 +298,7 @@ class AnalysisWorker(Worker):
         self.logger.info(f"📊 AnalysisWorker analyzing: {task}")
         
         from core.llmclient import LLMClient
-        analysis_llm = LLMClient(model_name="gpt-4o-mini")
+        analysis_llm = LLMClient(model_type="analysis")
         
         # Focus on analysis rather than new searches
         analysis_prompt = f"""
@@ -405,7 +405,7 @@ class SurveyWorker(Worker):
         self.logger.info(f"📋 SurveyWorker conducting survey: {task}")
         
         from core.llmclient import LLMClient
-        survey_llm = LLMClient(model_name="gpt-4o-mini")
+        survey_llm = LLMClient(model_type="worker")
         
         # Plan comprehensive survey strategy
         survey_prompt = f"""

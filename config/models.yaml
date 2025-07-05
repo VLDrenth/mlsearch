@@ -1,0 +1,24 @@
+# Model configuration for MLSearch
+# Update these settings to change which models are used by different components
+
+models:
+  # Default model for general LLM operations
+  default: "gpt-4o-mini"
+  
+  # Orchestrator planning and coordination
+  orchestrator: "gpt-4.1-2025-04-14"
+  
+  # Individual research agents
+  agent: "gpt-4.1-2025-04-14"
+  
+  # Background worker tasks  
+  worker: "gpt-4o-mini"
+  
+  # Analysis and synthesis tasks
+  analysis: "gpt-4o-mini"
+  
+  # Reasoning and evaluation tasks
+  reasoning: "gpt-4o-mini"
+  
+  # Planning tasks
+  planning: "gpt-4.1-2025-04-14"
