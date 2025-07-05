@@ -25,6 +25,36 @@ class MLSearchApp {
                 }
             });
         }
+        
+        // Intensity button listeners
+        const intensityButtons = document.querySelectorAll('.intensity-btn');
+        intensityButtons.forEach(button => {
+            button.addEventListener('click', (e) => this.handleIntensitySelection(e));
+        });
+    }
+    
+    handleIntensitySelection(event) {
+        // Remove active class from all buttons
+        const intensityButtons = document.querySelectorAll('.intensity-btn');
+        intensityButtons.forEach(btn => btn.classList.remove('active'));
+        
+        // Add active class to clicked button
+        event.target.classList.add('active');
+    }
+    
+    getSelectedIntensity() {
+        const activeButton = document.querySelector('.intensity-btn.active');
+        return activeButton ? activeButton.dataset.intensity : 'medium';
+    }
+    
+    getMaxResultsForIntensity(intensity) {
+        const intensityMapping = {
+            'light': 500,
+            'medium': 2500,
+            'heavy': 10000,
+            'extreme': 30000
+        };
+        return intensityMapping[intensity] || 2500;
     }
     
     async handleSearchSubmit(event) {
@@ -53,11 +83,12 @@ class MLSearchApp {
     }
     
     async startSearch(query) {
-        const maxResults = document.getElementById('maxResults')?.value || 100;
+        const selectedIntensity = this.getSelectedIntensity();
+        const maxResults = this.getMaxResultsForIntensity(selectedIntensity);
         
         const requestBody = {
             query: query,
-            max_results: parseInt(maxResults)
+            max_results: maxResults
         };
         
         console.log('Starting search with:', requestBody);

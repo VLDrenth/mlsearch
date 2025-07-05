@@ -27,13 +27,13 @@
         
         <div class="search-options">
             <div class="option-group">
-                <label for="maxResults" class="option-label">Max Results</label>
-                <select id="maxResults" class="option-select">
-                    <option value="50">50 papers</option>
-                    <option value="100" selected>100 papers</option>
-                    <option value="200">200 papers</option>
-                    <option value="500">500 papers</option>
-                </select>
+                <label class="option-label">Search Intensity</label>
+                <div class="intensity-buttons">
+                    <button type="button" class="intensity-btn" data-intensity="light">Light</button>
+                    <button type="button" class="intensity-btn active" data-intensity="medium">Medium</button>
+                    <button type="button" class="intensity-btn" data-intensity="heavy">Heavy</button>
+                    <button type="button" class="intensity-btn" data-intensity="extreme">Extreme</button>
+                </div>
             </div>
             
             <div class="option-group">
