@@ -34,6 +34,35 @@ class SimpleOrchestrator:
         self.logger.info("✅ SimpleOrchestrator completed successfully")
         return final_result
     
+    def get_all_papers(self) -> List[Dict]:
+        """Extract all papers found by agents for web interface."""
+        all_papers = []
+        
+        if not hasattr(self, 'agents'):
+            return all_papers
+        
+        for agent_info in self.agents:
+            agent = agent_info.get('agent')
+            agent_id = agent_info.get('id', 'unknown')
+            
+            if hasattr(agent, 'relevant_papers') and agent.relevant_papers:
+                for paper in agent.relevant_papers:
+                    # Add agent information to each paper
+                    paper_copy = paper.copy() if isinstance(paper, dict) else paper
+                    if isinstance(paper_copy, dict):
+                        paper_copy['found_by_agent'] = agent_id
+                        paper_copy['search_strategy'] = getattr(agent, 'search_strategy', 'Unknown')
+                    all_papers.append(paper_copy)
+        
+        return all_papers
+    
+    def get_ranked_papers_with_reasoning(self) -> List[Dict]:
+        """Extract ranked papers with relevance reasoning for web interface."""
+        if not hasattr(self, 'ranked_papers'):
+            return []
+        
+        return self.ranked_papers
+    
     async def _select_categories(self, task: str) -> List[str]:
         """Determine the most relevant arXiv categories for the given task."""
         self.logger.info("🎯 Selecting relevant arXiv categories...")
@@ -468,6 +497,9 @@ class SimpleOrchestrator:
                     "success": True
                 })
         
+        # Store agent outputs and agent references for external access (e.g., web interface)
+        self.agent_outputs = agent_outputs
+        self.agents = agents  # Store agent references to access their papers
         return agent_outputs
     
     async def _intelligent_merge(self, original_task: str, agent_outputs: List[Dict]) -> str:
@@ -686,5 +718,29 @@ class SimpleOrchestrator:
         
         result.append(f"---")
         result.append(f"Search completed by {len(self.agents)} agents")
+        
+        # Store ranked papers with reasoning for web interface
+        ranked_papers_data = []
+        for i, paper_idx in enumerate(ranking[:top_n]):
+            if paper_idx <= len(papers):
+                paper = papers[paper_idx - 1]  # Convert to 0-based index
+                rank_num = i + 1
+                
+                paper_data = {
+                    'rank': rank_num,
+                    'title': paper['title'],
+                    'authors': paper['authors'],
+                    'year': paper['year'],
+                    'pdf_url': paper['pdf_url'],
+                    'summary': paper.get('summary', ''),
+                    'agent_type': paper['agent_type'],
+                    'agent_focus': paper['agent_focus'],
+                    'relevance_reasoning': reasoning_dict.get(rank_num, ''),
+                    'relevance_score': (top_n - i) / top_n  # Simple scoring based on rank
+                }
+                ranked_papers_data.append(paper_data)
+        
+        # Store for web interface access
+        self.ranked_papers = ranked_papers_data
         
         return "\n".join(result)

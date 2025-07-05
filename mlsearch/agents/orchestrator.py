@@ -136,7 +136,7 @@ class Orchestrator:
             "angles": [
                 "Recent attention mechanism innovations (2023-2025): New architectures, efficiency improvements, novel attention patterns",
                 "Foundational attention theory and mathematical frameworks: Core principles, theoretical analysis, mathematical foundations",
-                "Real-world applications and performance benchmarks: Practical implementations, performance comparisons, industry adoption"
+                "Real-world applications and performance benchmarks: Practical implementations, performance comparisons"
             ]
         }}
         """

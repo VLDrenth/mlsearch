@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+
+{% block title %}Search Results - MLSearch{% endblock %}
+
+{% block content %}
+<!-- Results Header -->
+<div class="results-header">
+    <h1 class="results-title">Search Results</h1>
+    <div class="results-actions">
+        <a href="/" class="action-button">New Search</a>
+    </div>
+</div>
+
+<!-- Search Results will be loaded here -->
+<div id="searchResults">
+    <div class="loading">
+        <div class="spinner"></div>
+        <p>Loading search results...</p>
+    </div>
+</div>
+
+<!-- Papers Container -->
+<div id="papersContainer" class="papers-grid" style="display: none;">
+    <!-- Paper cards will be populated by JavaScript -->
+</div>
+
+<!-- Error Display -->
+<div id="errorDisplay" style="display: none; text-align: center; padding: 2rem; color: var(--error-color);">
+    <h2>Search Not Found</h2>
+    <p>The requested search could not be found or has expired.</p>
+    <a href="/" class="action-button primary">Start New Search</a>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// Results page specific JavaScript
+document.addEventListener('DOMContentLoaded', async () => {
+    const searchId = window.location.pathname.split('/').pop();
+    
+    if (!searchId) {
+        showError('No search ID provided');
+        return;
+    }
+    
+    try {
+        // Try to load the search results
+        const response = await fetch(`/api/search/${searchId}/results`);
+        
+        if (response.status === 202) {
+            // Search still in progress - redirect to home with progress
+            window.location.href = `/?search_id=${searchId}`;
+            return;
+        }
+        
+        if (!response.ok) {
+            throw new Error(`Failed to load results: ${response.status}`);
+        }
+        
+        const results = await response.json();
+        displayResults(results);
+        
+    } catch (error) {
+        console.error('Error loading results:', error);
+        showError('Failed to load search results');
+    }
+});
+
+function displayResults(results) {
+    // Hide loading
+    document.getElementById('searchResults').style.display = 'none';
+    
+    // Update title
+    const title = document.querySelector('.results-title');
+    if (title) {
+        title.textContent = `Results for "${results.query}"`;
+    }
+    
+    // Show papers container
+    const papersContainer = document.getElementById('papersContainer');
+    papersContainer.style.display = 'block';
+    
+    // Render papers
+    if (results.papers && results.papers.length > 0) {
+        papersContainer.innerHTML = results.papers.map(paper => renderPaperCard(paper)).join('');
+    } else {
+        papersContainer.innerHTML = `
+            <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+                <h3>No papers found</h3>
+                <p>Try adjusting your search query or search parameters.</p>
+                <a href="/" class="action-button primary">Try Another Search</a>
+            </div>
+        `;
+    }
+}
+
+function renderPaperCard(paper) {
+    const publishedDate = new Date(paper.published).toLocaleDateString();
+    const authorsText = paper.authors.slice(0, 3).join(', ') + (paper.authors.length > 3 ? ' et al.' : '');
+    
+    return `
+        <div class="paper-card">
+            <div class="paper-header">
+                <a href="${paper.url}" target="_blank" class="paper-title">
+                    ${escapeHtml(paper.title)}
+                </a>
+            </div>
+            <div class="paper-meta">
+                <span class="paper-authors">${escapeHtml(authorsText)}</span>
+                <span class="paper-date">${publishedDate}</span>
+                ${paper.relevance_score ? `<span class="relevance-score">Relevance: ${(paper.relevance_score * 100).toFixed(1)}%</span>` : ''}
+            </div>
+            <div class="paper-abstract">
+                ${escapeHtml(truncateText(paper.abstract, 300))}
+            </div>
+            <div class="paper-footer">
+                <div class="paper-categories">
+                    ${paper.categories.map(cat => `<span class="category-tag">${cat}</span>`).join('')}
+                </div>
+                <div class="paper-actions">
+                    <a href="${paper.url}" target="_blank" class="action-button">View Paper</a>
+                    <a href="${paper.pdf_url}" target="_blank" class="action-button primary">Download PDF</a>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function showError(message) {
+    document.getElementById('searchResults').style.display = 'none';
+    document.getElementById('papersContainer').style.display = 'none';
+    const errorDisplay = document.getElementById('errorDisplay');
+    errorDisplay.style.display = 'block';
+    errorDisplay.querySelector('p').textContent = message;
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function truncateText(text, maxLength) {
+    if (text.length <= maxLength) return text;
+    return text.substr(0, maxLength) + '...';
+}
+</script>
+{% endblock %}

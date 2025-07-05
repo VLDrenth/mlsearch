@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+
+{% block title %}MLSearch - Find Relevant Research Papers{% endblock %}
+
+{% block content %}
+<!-- Search Section -->
+<section id="searchSection" class="search-section">
+    <h1 class="search-title">AI-Powered Paper Search</h1>
+    <p class="search-subtitle">
+        Find relevant research papers using intelligent multi-agent search across ArXiv
+    </p>
+    
+    <form id="searchForm" class="search-form">
+        <div class="search-input-group">
+            <input 
+                type="text" 
+                id="searchInput" 
+                class="search-input" 
+                placeholder="Search for papers... (e.g., 'deep learning for time series forecasting')"
+                autocomplete="off"
+                required
+            >
+            <button type="submit" id="searchButton" class="search-button">
+                Search Papers
+            </button>
+        </div>
+        
+        <div class="search-options">
+            <div class="option-group">
+                <label for="maxResults" class="option-label">Max Results</label>
+                <select id="maxResults" class="option-select">
+                    <option value="50">50 papers</option>
+                    <option value="100" selected>100 papers</option>
+                    <option value="200">200 papers</option>
+                    <option value="500">500 papers</option>
+                </select>
+            </div>
+            
+            <div class="option-group">
+                <label for="searchStrategy" class="option-label">Search Strategy</label>
+                <select id="searchStrategy" class="option-select">
+                    <option value="auto" selected>Auto (Recommended)</option>
+                    <option value="recent">Recent Advances (2020+)</option>
+                    <option value="foundational">Foundational Literature</option>
+                    <option value="cross-disciplinary">Cross-Disciplinary</option>
+                    <option value="method-specific">Method-Specific</option>
+                    <option value="application-focused">Application-Focused</option>
+                </select>
+            </div>
+            
+            <div class="option-group">
+                <label for="arxivCategories" class="option-label">ArXiv Categories</label>
+                <select id="arxivCategories" class="option-select">
+                    <option value="auto" selected>Auto-Detect</option>
+                    <option value="cs.LG,stat.ML">Machine Learning</option>
+                    <option value="cs.AI">Artificial Intelligence</option>
+                    <option value="cs.CV">Computer Vision</option>
+                    <option value="cs.CL">Natural Language Processing</option>
+                    <option value="cs.IR">Information Retrieval</option>
+                    <option value="stat.AP">Applied Statistics</option>
+                </select>
+            </div>
+        </div>
+    </form>
+    
+    <!-- Example queries -->
+    <div style="margin-top: 2rem; text-align: left; max-width: 600px; margin-left: auto; margin-right: auto;">
+        <p style="font-weight: 500; margin-bottom: 0.5rem; color: var(--text-primary);">Example searches:</p>
+        <ul style="color: var(--text-secondary); font-size: 0.9rem;">
+            <li><button class="example-query" onclick="document.getElementById('searchInput').value='transformer attention mechanisms'; return false;">transformer attention mechanisms</button></li>
+            <li><button class="example-query" onclick="document.getElementById('searchInput').value='federated learning privacy'; return false;">federated learning privacy</button></li>
+            <li><button class="example-query" onclick="document.getElementById('searchInput').value='graph neural networks for molecular property prediction'; return false;">graph neural networks for molecular property prediction</button></li>
+            <li><button class="example-query" onclick="document.getElementById('searchInput').value='few-shot learning meta-learning'; return false;">few-shot learning meta-learning</button></li>
+        </ul>
+    </div>
+</section>
+
+<!-- Progress Section (Hidden by default) -->
+<section id="progressSection" class="progress-container" style="display: none;">
+    <div class="progress-header">
+        <h2>Search in Progress</h2>
+        <button onclick="window.mlSearchApp.newSearch()" class="action-button">New Search</button>
+    </div>
+    
+    <div class="progress-bar">
+        <div id="progressBar" class="progress-fill" style="width: 0%;"></div>
+    </div>
+    
+    <p id="progressText" class="progress-text">Initializing search...</p>
+    
+    <!-- Agent Progress Cards -->
+    <div id="agentProgress" class="agent-progress">
+        <!-- Agent cards will be populated by JavaScript -->
+    </div>
+</section>
+
+<!-- Results Section (Hidden by default) -->
+<section id="resultsSection" class="results-section" style="display: none;">
+    <div class="results-header">
+        <h2 id="resultsTitle" class="results-title">Most Relevant Papers</h2>
+        <div class="results-actions">
+            <span id="resultsStats" class="results-stats">Found 0 papers</span>
+            <button onclick="window.mlSearchApp.newSearch()" class="action-button">New Search</button>
+        </div>
+    </div>
+    
+    <div style="margin-bottom: 1.5rem; padding: 1rem; background: #f8fafc; border-radius: 0.5rem; border-left: 4px solid var(--primary-color);">
+        <p style="color: var(--text-secondary); margin: 0;">
+            <strong>📊 Intelligent Ranking:</strong> These papers have been analyzed and ranked by AI agents based on their relevance to your query. 
+            Each paper includes an explanation of why it's relevant to help you focus on the most promising research.
+        </p>
+    </div>
+    
+    <!-- Papers Container -->
+    <div id="papersContainer" class="papers-grid">
+        <!-- Paper cards will be populated by JavaScript -->
+    </div>
+</section>
+
+<!-- Loading Section (Fallback) -->
+<section id="loadingSection" class="loading" style="display: none;">
+    <div class="spinner"></div>
+    <p>Processing your search...</p>
+</section>
+{% endblock %}
+
+{% block extra_head %}
+<style>
+.example-query {
+    background: none;
+    border: none;
+    color: var(--primary-color);
+    cursor: pointer;
+    text-decoration: underline;
+    font-size: inherit;
+    padding: 0;
+    margin: 0;
+}
+
+.example-query:hover {
+    color: var(--primary-hover);
+}
+
+.progress-text {
+    text-align: center;
+    color: var(--text-secondary);
+    margin-bottom: 1rem;
+}
+
+.results-actions {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+@media (max-width: 768px) {
+    .results-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+    }
+    
+    .results-actions {
+        width: 100%;
+        justify-content: space-between;
+    }
+}
+</style>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// Additional search page specific JavaScript can go here
+console.log('Search page loaded');
+</script>
+{% endblock %}

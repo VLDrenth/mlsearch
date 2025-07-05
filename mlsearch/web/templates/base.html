@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}MLSearch - AI-Powered Academic Paper Search{% endblock %}</title>
+    
+    <!-- Preconnect to external resources -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="/static/images/favicon.ico">
+    
+    <!-- CSS -->
+    <link rel="stylesheet" href="/static/css/style.css">
+    
+    <!-- Meta tags for SEO -->
+    <meta name="description" content="MLSearch - AI-powered academic paper search using multi-agent orchestration to find relevant research papers from ArXiv">
+    <meta name="keywords" content="machine learning, research papers, arxiv, academic search, AI">
+    <meta name="author" content="MLSearch">
+    
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <div class="header-content">
+                <a href="/" class="logo">🔬 MLSearch</a>
+                <nav>
+                    <ul class="nav-links">
+                        <li><a href="/">Search</a></li>
+                        <li><a href="/api/docs" target="_blank">API Docs</a></li>
+                        <li><a href="https://github.com/vincentdrenth/mlsearch" target="_blank">GitHub</a></li>
+                    </ul>
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <div class="container">
+            {% block content %}{% endblock %}
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer style="margin-top: 4rem; padding: 2rem 0; border-top: 1px solid var(--border-color); text-align: center; color: var(--text-secondary);">
+        <div class="container">
+            <p>&copy; 2024 MLSearch. Powered by AI agents and ArXiv.</p>
+        </div>
+    </footer>
+
+    <!-- JavaScript -->
+    <script src="/static/js/search.js"></script>
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>

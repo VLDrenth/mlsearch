@@ -6,4 +6,7 @@ fastapi
 arxiv
 python-dotenv
 pydantic
-uvicorn
+uvicorn[standard]
+jinja2
+python-multipart
+websockets
