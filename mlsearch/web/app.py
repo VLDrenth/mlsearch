@@ -100,10 +100,11 @@ if __name__ == "__main__":
         exit(1)
     
     # Run the application
+    port = int(os.getenv("PORT", 8000))
     uvicorn.run(
         "mlsearch.web.app:app",
         host="0.0.0.0",
-        port=8000,
-        reload=True,
+        port=port,
+        reload=False,  # Disable reload in production
         log_level="info"
     )

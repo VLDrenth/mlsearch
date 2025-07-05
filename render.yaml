@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: mlsearch
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m mlsearch.web.app
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: PORT
+        value: 10000
