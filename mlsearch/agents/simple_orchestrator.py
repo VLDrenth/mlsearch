@@ -158,9 +158,6 @@ class SimpleOrchestrator:
         
         response = self.llm.generate(category_prompt).strip()
         
-        # Log the LLM's reasoning
-        self.logger.info(f"🧠 LLM Category Selection Response: {response}")
-        
         # Parse categories
         categories = [cat.strip() for cat in response.split(",")]
         
@@ -208,6 +205,51 @@ class SimpleOrchestrator:
         self.logger.info(f"🎯 Selected categories: {', '.join(categories)}")
         return categories
     
+    def _parse_agent_plan_json(self, response: str) -> List[Dict]:
+        """Parse agent plan from LLM response with robust JSON extraction."""
+        import json
+        import re
+        
+        response = response.strip()
+        
+        # Extract JSON array from response - find first [ to last ]
+        start_bracket = response.find('[')
+        end_bracket = response.rfind(']')
+        
+        if start_bracket != -1 and end_bracket != -1 and end_bracket > start_bracket:
+            json_text = response[start_bracket:end_bracket + 1]
+        else:
+            # Fallback to whole response
+            json_text = response
+        
+        try:
+            return json.loads(json_text)
+        except json.JSONDecodeError:
+            # Try to extract first complete object if array is truncated
+            start_obj = json_text.find('{')
+            if start_obj == -1:
+                raise ValueError("No JSON object found in response")
+            
+            # Find matching closing brace
+            brace_count = 0
+            end_obj = -1
+            for i in range(start_obj, len(json_text)):
+                if json_text[i] == '{':
+                    brace_count += 1
+                elif json_text[i] == '}':
+                    brace_count -= 1
+                    if brace_count == 0:
+                        end_obj = i
+                        break
+            
+            if end_obj != -1:
+                # Extract first complete object and wrap in array
+                first_object = json_text[start_obj:end_obj + 1]
+                fixed_json = '[' + first_object + ']'
+                return json.loads(fixed_json)
+            
+            raise ValueError("Could not parse JSON from response")
+
     def _get_search_strategy_templates(self) -> Dict[str, Dict]:
         """Get predefined search strategy templates for consistent agent deployment."""
         return {
@@ -368,101 +410,9 @@ class SimpleOrchestrator:
         
         response = self.llm.generate(planning_prompt, max_tokens=2000)  # Allow more tokens for complete JSON
         
-        # Log the LLM's agent planning reasoning
-        self.logger.info(f"🧠 LLM Agent Planning Response (length: {len(response)} chars):")
-        if len(response) > 500:
-            self.logger.info(f"   Start: {response[:250]}...")
-            self.logger.info(f"   End: ...{response[-250:]}")
-        else:
-            self.logger.info(f"   Full: {response}")
-        
         try:
-            # Clean JSON response
-            import json
-            import re
-            response = response.strip()
-            self.logger.info(f"🔍 Raw LLM response length: {len(response)} chars")
-            if len(response) > 1000:
-                self.logger.info(f"🔍 Response start: {response[:200]}...")
-                self.logger.info(f"🔍 Response end: ...{response[-200:]}")
-            else:
-                self.logger.info(f"🔍 Full response: {response}")
-            
-            # Extract JSON from response - handle various formats
-            json_text = response
-            
-            # Look for JSON code blocks first
-            json_match = re.search(r'```json\s*(\[.*\])\s*```', response, re.DOTALL)
-            if json_match:
-                json_text = json_match.group(1)
-            else:
-                # Look for JSON arrays anywhere in the response - match from first [ to last ]
-                start_bracket = response.find('[')
-                end_bracket = response.rfind(']')
-                if start_bracket != -1 and end_bracket != -1 and end_bracket > start_bracket:
-                    json_text = response[start_bracket:end_bracket + 1]
-                else:
-                    # Fallback - use whole response
-                    json_text = response
-            
-            json_text = json_text.strip()
-            self.logger.info(f"🔍 Extracted JSON: {json_text[:200]}...")  # Show first 200 chars for debugging
-            
-            # Try to parse JSON, with fallback for incomplete JSON
-            try:
-                agent_plan = json.loads(json_text)
-            except json.JSONDecodeError as e:
-                # Try to fix common JSON issues
-                self.logger.warning(f"JSON decode error: {e}, attempting to fix...")
-                self.logger.info(f"🔍 Original JSON text: {repr(json_text)}")
-                
-                # Try to close incomplete JSON
-                fixed_json = json_text
-                
-                # Try to extract just the first complete object if array is incomplete
-                # Find the start of the first object
-                start_idx = fixed_json.find('{')
-                if start_idx != -1:
-                    # Find the end of the first complete object
-                    brace_count = 0
-                    end_idx = -1
-                    for i in range(start_idx, len(fixed_json)):
-                        if fixed_json[i] == '{':
-                            brace_count += 1
-                        elif fixed_json[i] == '}':
-                            brace_count -= 1
-                            if brace_count == 0:
-                                end_idx = i
-                                break
-                    
-                    if end_idx != -1:
-                        # Extract just the first complete object and wrap in array
-                        first_object = fixed_json[start_idx:end_idx + 1]
-                        fixed_json = '[' + first_object + ']'
-                    else:
-                        # Object is incomplete, try to close it
-                        object_part = fixed_json[start_idx:]
-                        open_braces = object_part.count('{') - object_part.count('}')
-                        if open_braces > 0:
-                            object_part += '}' * open_braces
-                        fixed_json = '[' + object_part + ']'
-                
-                json_text = fixed_json
-                self.logger.info(f"🔍 Fixed JSON text: {repr(json_text)}")
-                
-                # Try parsing again
-                try:
-                    agent_plan = json.loads(json_text)
-                    self.logger.info("✅ Successfully fixed and parsed JSON")
-                except json.JSONDecodeError as e2:
-                    # Final fallback
-                    self.logger.error("❌ Could not parse JSON even after fixes, using fallback")
-                    raise e
-            
-            self.logger.info(f"📋 Planned {len(agent_plan)} agents:")
-            self.logger.info("🤖 Agent Specifications:")
-            for i, spec in enumerate(agent_plan, 1):
-                self.logger.info(f"   Agent {i}: {spec}")
+            agent_plan = self._parse_agent_plan_json(response)
+            self.logger.info(f"📋 Planned {len(agent_plan)} agents")
             
             # Validate and normalize agent specifications
             normalized_plan = []
@@ -506,34 +456,18 @@ class SimpleOrchestrator:
                 
                 normalized_plan.append(normalized_spec)
                 
-                self.logger.info(f"  Agent {i}: {agent_type} - {normalized_spec['search_strategy']}")
-                self.logger.info(f"    Categories: {normalized_spec['arxiv_categories']}")
-                self.logger.info(f"    Search Terms: {normalized_spec['search_terms']}")
-                self.logger.info(f"    Focus: {normalized_spec['focus_description']}")
-                if 'query_patterns' in normalized_spec:
-                    self.logger.info(f"    Query Patterns: {normalized_spec['query_patterns']}")
-            
-            # Final deployment summary
-            self.logger.info(f"🎯 Final Deployment Plan: {len(normalized_plan)} agents with diverse strategies")
-            strategies = [spec.get('search_strategy', 'Unknown') for spec in normalized_plan]
-            self.logger.info(f"   Strategies: {', '.join(strategies)}")
-            all_categories = []
-            for spec in normalized_plan:
-                all_categories.extend(spec.get('arxiv_categories', []))
-            unique_categories = list(set(all_categories))
-            self.logger.info(f"   Total Categories Covered: {len(unique_categories)} ({', '.join(unique_categories)})")
+                self.logger.info(f"  Agent {i}: {agent_type} - {normalized_spec['search_strategy']} - {normalized_spec['arxiv_categories']}")
             
             return normalized_plan
             
         except Exception as e:
-            self.logger.error(f"❌ Error parsing agent plan: {e}")
-            self.logger.error(f"❌ Failed JSON extraction: {json_text if 'json_text' in locals() else 'N/A'}")
+            self.logger.warning(f"Agent planning failed: {e}. Using fallback single agent.")
             # Create a sensible fallback plan
             return [{
                 "type": "ResearchAgent",
                 "search_strategy": "Foundational Literature", 
                 "arxiv_categories": ["cs.LG", "stat.ML"],
-                "search_terms": [word for word in task.split() if len(word) > 3][:5],  # Extract meaningful words
+                "search_terms": [word for word in task.split() if len(word) > 3][:5],
                 "focus_description": f"Research foundational literature on {task}",
                 "query_patterns": [f'"{task}"']
             }]
