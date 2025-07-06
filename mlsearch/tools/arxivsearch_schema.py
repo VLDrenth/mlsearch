@@ -24,3 +24,9 @@ ARXIV_SEARCH_SCHEMA = {
         "required": ["query"],
     },
 }
+
+# OpenAI Function Calling Format (wrapped version)
+ARXIV_SEARCH_FUNCTION = {
+    "type": "function",
+    "function": ARXIV_SEARCH_SCHEMA
+}

@@ -1,20 +1,36 @@
 from __future__ import annotations
 import logging
-from typing import Dict, Callable, Any
+import json
+from typing import Dict, Callable, Any, List, Optional
 from core.llmclient import LLMClient
+from core.tool_registry import get_tool_registry
 
 
 class Agent:
     """Base agent class with direct tool access and reasoning capabilities."""
     
-    def __init__(self, tools: Dict[str, Callable], llm_client: LLMClient = None) -> None:
-        self.tools = tools
+    def __init__(self, tools: Optional[Dict[str, Callable]] = None, llm_client: LLMClient = None) -> None:
+        # Legacy support for direct tool passing
+        self.legacy_tools = tools or {}
+        
+        # Use tool registry for modern function calling
+        self.tool_registry = get_tool_registry()
+        
         self.llm = llm_client or LLMClient(model_type="agent")
         self.output = ""
         self.relevant_papers = []  # Memory of relevant papers found
         self.search_notes = []     # Notes about search progress
         self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
-        self.logger.info(f"🤖 {self.__class__.__name__} initialized with {len(tools)} tools")
+        
+        # Determine tool count for logging
+        registry_tools = len(self.tool_registry.list_tools())
+        legacy_tools = len(self.legacy_tools)
+        total_tools = max(registry_tools, legacy_tools)
+        
+        self.logger.info(f"🤖 {self.__class__.__name__} initialized with {total_tools} tools (registry: {registry_tools}, legacy: {legacy_tools})")
+        
+        # Use function calling if tools are available in registry
+        self.use_function_calling = registry_tools > 0
     
     async def work(self, task: str) -> str:
         """Override this method in subclasses to implement specific agent behavior."""
@@ -28,11 +44,20 @@ class Agent:
     
     async def call_tool(self, tool_name: str, **kwargs) -> Any:
         """Call a tool directly with the given arguments."""
-        if tool_name not in self.tools:
-            raise ValueError(f"Tool '{tool_name}' not available. Available tools: {list(self.tools.keys())}")
+        # Try tool registry first
+        if self.tool_registry.get_tool(tool_name):
+            self.logger.info(f"🔧 Calling tool via registry: {tool_name} with args: {kwargs}")
+            result = await self.tool_registry.execute_tool(tool_name, kwargs)
+            self.logger.info(f"✅ Tool {tool_name} completed")
+            return result
         
-        tool_func = self.tools[tool_name]
-        self.logger.info(f"🔧 Calling tool: {tool_name} with args: {kwargs}")
+        # Fallback to legacy tools
+        if tool_name not in self.legacy_tools:
+            available_tools = list(self.tool_registry.list_tools()) + list(self.legacy_tools.keys())
+            raise ValueError(f"Tool '{tool_name}' not available. Available tools: {available_tools}")
+        
+        tool_func = self.legacy_tools[tool_name]
+        self.logger.info(f"🔧 Calling legacy tool: {tool_name} with args: {kwargs}")
         
         # Handle async tools
         import asyncio
@@ -41,10 +66,76 @@ class Agent:
         else:
             result = tool_func(**kwargs)
         
-        self.logger.info(f"✅ Tool {tool_name} completed")
+        self.logger.info(f"✅ Legacy tool {tool_name} completed")
         return result
+
+    async def call_tool_with_function_calling(self, prompt: str) -> Any:
+        """
+        Use LLM function calling to determine and execute tool calls.
+        
+        Parameters
+        ----------
+        prompt : str
+            The prompt that should trigger tool usage.
+            
+        Returns
+        -------
+        Any
+            The result of tool execution or LLM response.
+        """
+        if not self.use_function_calling:
+            self.logger.warning("Function calling not available, falling back to text generation")
+            return self.llm.generate(prompt)
+        
+        # Get available tools in OpenAI format
+        tools = self.tool_registry.get_openai_tools()
+        
+        if not tools:
+            self.logger.warning("No tools available in registry, falling back to text generation")
+            return self.llm.generate(prompt)
+        
+        self.logger.info(f"🧠 Using function calling with {len(tools)} available tools")
+        
+        # Generate response with tool calling
+        response = self.llm.generate_with_tools(prompt, tools, tool_choice="auto")
+        
+        # Check if LLM wants to call tools
+        if response.get("tool_calls"):
+            tool_results = []
+            
+            for tool_call in response["tool_calls"]:
+                try:
+                    function_name = tool_call["function"]["name"]
+                    function_args = json.loads(tool_call["function"]["arguments"])
+                    
+                    self.logger.info(f"🔧 LLM requested tool call: {function_name} with args: {function_args}")
+                    
+                    # Execute the tool
+                    result = await self.tool_registry.execute_tool(function_name, function_args)
+                    
+                    tool_results.append({
+                        "tool_call_id": tool_call["id"],
+                        "result": result
+                    })
+                    
+                    self.logger.info(f"✅ Tool {function_name} completed successfully")
+                    
+                except Exception as e:
+                    self.logger.error(f"❌ Error executing tool {function_name}: {e}")
+                    tool_results.append({
+                        "tool_call_id": tool_call["id"],
+                        "result": f"Error: {str(e)}"
+                    })
+            
+            # Get LLM's response to tool results
+            if tool_results:
+                final_response = self.llm.continue_conversation(tool_results)
+                return final_response
+            
+        # Return text response if no tools were called
+        return response.get("content", "")
     
-    def _evaluate_papers_relevance(self, task: str, papers: List[dict]) -> List[dict]:
+    def _evaluate_papers_relevance(self, task: str, papers: list) -> list:
         """Evaluate which papers are relevant to the task and add them to memory."""
         if not papers:
             return []

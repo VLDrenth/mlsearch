@@ -21,7 +21,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from agents.simple_orchestrator import SimpleOrchestrator
+from tools import initialize_tools, get_default_tools
 from tools.arxivsearch import arxiv_search
+from core.tool_registry import get_tool_registry
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -42,14 +44,17 @@ async def run_search_orchestrator(search_id: str, request: SearchRequest):
             active_searches[search_id].status = SearchStatus.PLANNING
             active_searches[search_id].updated_at = datetime.now()
         
-        # Create orchestrator with tools
+        # Initialize modern tool registry
+        initialize_tools()
+        
+        # Create orchestrator with modern tool registry and legacy tools for backward compatibility
         def arxiv_search_with_limit(query: str, limit: int = None) -> list:
             if limit is None:
                 limit = request.max_results
             return arxiv_search(query, limit=min(limit, request.max_results))
         
         tools = {"arxiv_search": arxiv_search_with_limit}
-        orchestrator = SimpleOrchestrator(tools)
+        orchestrator = SimpleOrchestrator(tools=tools)
         
         # Update status to searching
         if search_id in active_searches:

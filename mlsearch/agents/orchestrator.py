@@ -1,15 +1,23 @@
 from core.llmclient import LLMClient
 from core.types import Plan
+from core.tool_registry import get_tool_registry
 from prompts.planner import build_planner_prompts
 from agents.worker import Worker, worker_registry
 import json, asyncio, logging
+from typing import Dict, Callable, Optional
 
 class Orchestrator:
-    def __init__(self, planner: LLMClient, tools: dict) -> None:
+    def __init__(self, planner: LLMClient, tools: Optional[Dict[str, Callable]] = None) -> None:
         self.planner = planner          # LLM used only for the plan
-        self.tools   = tools            # {'web_search': fn, 'python': fn}
+        self.legacy_tools = tools or {} # Legacy tools for backward compatibility
+        self.tool_registry = get_tool_registry()  # Modern tool registry
         self.pool    = {}               # Worker instance
         self.logger = logging.getLogger(__name__)
+        
+        # Log tool availability
+        registry_tools = len(self.tool_registry.list_tools())
+        legacy_tools = len(self.legacy_tools)
+        self.logger.info(f"🎼 Orchestrator initialized with {max(registry_tools, legacy_tools)} tools (registry: {registry_tools}, legacy: {legacy_tools})")
 
     async def run(self, user_task: str) -> str:
         self.logger.info(f"🚀 Starting orchestration for task: {user_task}")
@@ -177,9 +185,16 @@ class Orchestrator:
         return self.planner.generate(user_prompt)
 
     async def _call_tool(self, name: str, args: dict) -> str:
-        if name not in self.tools:
-            raise KeyError(f"Unknown tool {name}")
-        fn = self.tools[name]
+        # Try tool registry first
+        if self.tool_registry.get_tool(name):
+            return await self.tool_registry.execute_tool(name, args)
+        
+        # Fallback to legacy tools
+        if name not in self.legacy_tools:
+            available_tools = list(self.tool_registry.list_tools()) + list(self.legacy_tools.keys())
+            raise KeyError(f"Unknown tool {name}. Available tools: {available_tools}")
+        
+        fn = self.legacy_tools[name]
         if asyncio.iscoroutinefunction(fn):
             return await fn(**args)
         return fn(**args)

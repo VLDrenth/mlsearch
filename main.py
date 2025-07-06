@@ -13,7 +13,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent / "mlsearch"))
 
 from agents.simple_orchestrator import SimpleOrchestrator
+from tools import initialize_tools, get_default_tools
 from tools.arxivsearch import arxiv_search
+from core.tool_registry import get_tool_registry
 
 async def main():
     """Main CLI function."""
@@ -76,11 +78,17 @@ Examples:
             limit = max_results
         return arxiv_search(query, limit=min(limit, max_results))
     
-    # Initialize components with simplified architecture
+    # Initialize components with modern tool registry
+    # Ensure tools are initialized
+    initialize_tools()
+    
+    # The tool registry is already set up, but we can provide a legacy wrapper if needed
     tools = {
         "arxiv_search": arxiv_search_with_limit
     }
-    orchestrator = SimpleOrchestrator(tools)
+    
+    # Create orchestrator - it will use tool registry first, then fall back to legacy tools
+    orchestrator = SimpleOrchestrator(tools=tools)
     
     print(f"Researching: {query}")
     print(f"Max results per search: {max_results}")
