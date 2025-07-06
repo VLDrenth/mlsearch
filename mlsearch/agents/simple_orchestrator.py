@@ -573,59 +573,59 @@ class SimpleOrchestrator:
     
     def _extract_and_rank_papers(self, original_task: str, agent_outputs: List[Dict]) -> str:
         """Extract all papers from agents and rank them by relevance."""
-        import re
         
-        # Extract all paper data from agent outputs
+        # Extract all paper data directly from agent objects
         all_papers = []
         
+        # Create a mapping from agent output to agent object for metadata
+        agent_map = {}
+        for agent_info in self.agents:
+            agent_id = agent_info.get('id', 'unknown')
+            agent_map[agent_id] = agent_info
+        
         for output in agent_outputs:
-            agent_output = output.get('output', '')
+            agent_id = output.get('id', 'unknown')
             agent_focus = output.get('focus', '')
             agent_type = output.get('type', '')
             
-            # Look for the new format: "### N. Title (Year)"
-            if '## Relevant Papers Found' in agent_output:
-                lines = agent_output.split('\n')
-                in_papers_section = False
-                current_paper = {}
+            # Get the corresponding agent object
+            agent_info = agent_map.get(agent_id)
+            if not agent_info:
+                continue
                 
-                for line in lines:
-                    line = line.strip()
-                    if line == '## Relevant Papers Found':
-                        in_papers_section = True
-                        continue
-                    elif line.startswith('##') and in_papers_section and not line.startswith('### '):
-                        break
-                    elif in_papers_section:
-                        # Parse paper entries
-                        if line.startswith('### '):
-                            # Save previous paper if exists
-                            if current_paper.get('title'):
-                                all_papers.append(current_paper)
-                            
-                            # Start new paper: "### 1. Title (Year)"
-                            match = re.match(r'### \d+\.\s*(.+?)\s*\((\d+)\)', line)
-                            if match:
-                                title, year = match.groups()
-                                current_paper = {
-                                    'title': title.strip(),
-                                    'year': int(year) if year.isdigit() else 0,
-                                    'authors': '',
-                                    'pdf_url': '',
-                                    'summary': '',
-                                    'agent_focus': agent_focus,
-                                    'agent_type': agent_type
-                                }
-                        elif line.startswith('**Authors:**'):
-                            current_paper['authors'] = line.replace('**Authors:**', '').strip()
-                        elif line.startswith('**PDF:**'):
-                            current_paper['pdf_url'] = line.replace('**PDF:**', '').strip()
-                        elif line.startswith('**Summary:**'):
-                            current_paper['summary'] = line.replace('**Summary:**', '').strip()
-                
-                # Don't forget the last paper
-                if current_paper.get('title'):
-                    all_papers.append(current_paper)
+            agent = agent_info.get('agent')
+            if not agent or not hasattr(agent, 'relevant_papers'):
+                continue
+            
+            # Access papers directly from agent's memory
+            for paper in agent.relevant_papers:
+                if isinstance(paper, dict):
+                    # Create a copy and add agent metadata
+                    paper_copy = paper.copy()
+                    paper_copy['agent_focus'] = agent_focus
+                    paper_copy['agent_type'] = agent_type
+                    
+                    # Ensure required fields exist
+                    if 'title' in paper_copy and paper_copy['title']:
+                        # Convert authors list to string if needed
+                        if isinstance(paper_copy.get('authors'), list):
+                            paper_copy['authors'] = ', '.join(paper_copy['authors'])
+                        
+                        # Ensure all required fields exist
+                        for field in ['authors', 'pdf_url', 'summary']:
+                            if field not in paper_copy:
+                                paper_copy[field] = ''
+                        
+                        # Ensure year is an integer
+                        if 'year' in paper_copy:
+                            try:
+                                paper_copy['year'] = int(paper_copy['year'])
+                            except (ValueError, TypeError):
+                                paper_copy['year'] = 0
+                        else:
+                            paper_copy['year'] = 0
+                        
+                        all_papers.append(paper_copy)
         
         # Remove duplicates based on title similarity
         unique_papers = self._deduplicate_papers(all_papers)
